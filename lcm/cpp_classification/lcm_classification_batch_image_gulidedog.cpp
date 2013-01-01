@@ -132,10 +132,12 @@ private:
 	// LCM Message Channels
 	std::string image_channel_;
 	int64_t start_time;
+	int64_t end_time;
 	bot_core_image_t_subscription_t* sub;
 	// motion visualization
 	bool motion_visual_;
-
+    // repair bar label
+	std::vector<std::string> bar_label_;
 };
 
 Classifier::Classifier(const string& model_file,
@@ -159,6 +161,15 @@ Classifier::Classifier(const string& model_file,
 	/* Set threshold */
 	//this->pred_threshold_ = 0.9;
 	//this->diff_threshold_ = 3;
+
+    /* set bar label*/
+	std::string barlabel;
+	barlabel = "TL";
+	this->bar_label_.push_back(barlabel);
+	barlabel = "GS";
+	this->bar_label_.push_back(barlabel);
+	barlabel = "TR";
+	this->bar_label_.push_back(barlabel);
 
 	/* Set batchsize */
 	this->batch_size_ = 5;
@@ -390,8 +401,11 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
         std::cout << "size: " << input_geometry_ << std::endl;
         /* mean substraction for guidedog */
         if (num_channels_ == 3){
-          cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
-          cv::subtract(sample_float, m, sample_float);}
+          cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(128, 128, 128));
+          //cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
+          cv::subtract(sample_float, m, sample_float);
+          sample_float = sample_float * 0.0078125;
+		}
         else{
           cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC1, cv::Scalar(128));
           cv::subtract(sample_float, m, sample_float);
@@ -465,7 +479,10 @@ void Classifier::image_preprocess( ) {
     april_tags_gd_class_array_t gd_class_array;
     
     predictions = this->ClassifyBatch(this->imgs_, this->output_number_);
-    
+   
+	end_time = bot_timestamp_now();
+    std::cout << "process time: " << end_time - start_time << std::endl;
+
 	for (int j=0; j < this->batch_size_; j++)
 	{
 		for (int k = 0; k < this->output_number_; k++)
@@ -485,7 +502,7 @@ void Classifier::image_preprocess( ) {
 	april_tags_gd_class_array_t_publish(lcm_, "gd_class_array", &gd_class_array);
 	if(this->motion_visual_){
 		/* draw motion arrow */
-    	this->carcmd_visualization(&gd_class_array);
+//    	this->carcmd_visualization(&gd_class_array);
     	/* draw probability bar */
         this->draw_prob_bar(&gd_class_array);
     	std::stringstream drawn_image_topic;
@@ -667,6 +684,8 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
         for(int j = 0; j < this->output_number_; j++){
         	/* get bar left buttom and right top points */
             shift = this->get_predition_output_index(gd_class_array->gd_array[i].preds[j].type);
+			/* fix shift*/
+			shift = 2 - shift;
             bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
             bar_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound - int(gd_class_array->gd_array[i].preds[j].prob * 100));
             bar_bg_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound -100);
@@ -674,9 +693,10 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
             cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
             cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
             /* write classes labels */
-            label = this->labels_[shift];
-            label.erase(label.length()-1);
-            label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
+            //label = this->labels_[shift];
+            //label.erase(label.length()-1);
+            label = this->bar_label_[shift];
+			label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
             cv::putText(this->imgs_[i],label,label_point,0,0.5,cv::Scalar(255, 170, 0),2);
         }
     }
