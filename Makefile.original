@@ -58,8 +58,6 @@ GTEST_SRC := src/gtest/gtest-all.cpp
 TOOL_SRCS := $(shell find tools -name "*.cpp")
 # EXAMPLE_SRCS are the source files for the example binaries
 EXAMPLE_SRCS := $(shell find examples -name "*.cpp")
-# LCM_SRCS are the source files for the example binaries
-LCM_SRCS := $(shell find lcm -name "*.cpp")
 # BUILD_INCLUDE_DIR contains any generated header files we want to include.
 BUILD_INCLUDE_DIR := $(BUILD_DIR)/src
 # PROTO_SRCS are the protocol buffer definitions
@@ -77,7 +75,6 @@ NONGEN_CXX_SRCS := $(shell find \
 	python/$(PROJECT) \
 	matlab/+$(PROJECT)/private \
 	examples \
-	lcm \
 	tools \
 	-name "*.cpp" -or -name "*.hpp" -or -name "*.cu" -or -name "*.cuh")
 LINT_SCRIPT := scripts/cpp_lint.py
@@ -127,14 +124,12 @@ TEST_CU_OBJS := $(addprefix $(BUILD_DIR)/cuda/, ${TEST_CU_SRCS:.cu=.o})
 TEST_OBJS := $(TEST_CXX_OBJS) $(TEST_CU_OBJS)
 GTEST_OBJ := $(addprefix $(BUILD_DIR)/, ${GTEST_SRC:.cpp=.o})
 EXAMPLE_OBJS := $(addprefix $(BUILD_DIR)/, ${EXAMPLE_SRCS:.cpp=.o})
-LCM_OBJS := $(addprefix $(BUILD_DIR)/, ${LCM_SRCS:.cpp=.o})
 # Output files for automatic dependency generation
 DEPS := ${CXX_OBJS:.o=.d} ${CU_OBJS:.o=.d} ${TEST_CXX_OBJS:.o=.d} \
 	${TEST_CU_OBJS:.o=.d} $(BUILD_DIR)/${MAT$(PROJECT)_SO:.$(MAT_SO_EXT)=.d}
 # tool, example, and test bins
 TOOL_BINS := ${TOOL_OBJS:.o=.bin}
 EXAMPLE_BINS := ${EXAMPLE_OBJS:.o=.bin}
-LCM_BINS := ${LCM_OBJS:.o=.bin}
 # symlinks to tool bins without the ".bin" extension
 TOOL_BIN_LINKS := ${TOOL_BINS:.bin=}
 # Put the test binaries in build/test for convenience.
@@ -155,10 +150,9 @@ CXX_WARNS := $(addprefix $(BUILD_DIR)/, ${CXX_SRCS:.cpp=.o.$(WARNS_EXT)})
 CU_WARNS := $(addprefix $(BUILD_DIR)/cuda/, ${CU_SRCS:.cu=.o.$(WARNS_EXT)})
 TOOL_WARNS := $(addprefix $(BUILD_DIR)/, ${TOOL_SRCS:.cpp=.o.$(WARNS_EXT)})
 EXAMPLE_WARNS := $(addprefix $(BUILD_DIR)/, ${EXAMPLE_SRCS:.cpp=.o.$(WARNS_EXT)})
-LCM_WARNS := $(addprefix $(BUILD_DIR)/, ${LCM_SRCS:.cpp=.o.$(WARNS_EXT)})
 TEST_WARNS := $(addprefix $(BUILD_DIR)/, ${TEST_SRCS:.cpp=.o.$(WARNS_EXT)})
 TEST_CU_WARNS := $(addprefix $(BUILD_DIR)/cuda/, ${TEST_CU_SRCS:.cu=.o.$(WARNS_EXT)})
-ALL_CXX_WARNS := $(CXX_WARNS) $(TOOL_WARNS) $(EXAMPLE_WARNS) $(LCM_WARNS) $(TEST_WARNS)
+ALL_CXX_WARNS := $(CXX_WARNS) $(TOOL_WARNS) $(EXAMPLE_WARNS) $(TEST_WARNS)
 ALL_CU_WARNS := $(CU_WARNS) $(TEST_CU_WARNS)
 ALL_WARNS := $(ALL_CXX_WARNS) $(ALL_CU_WARNS)
 
@@ -238,7 +232,6 @@ DOXYGEN_SOURCES := $(shell find \
 	python/ \
 	matlab/ \
 	examples \
-	lcm \
 	tools \
 	-name "*.cpp" -or -name "*.hpp" -or -name "*.cu" -or -name "*.cuh" -or \
         -name "*.py" -or -name "*.m")
@@ -446,11 +439,11 @@ endif
 ##############################
 # Define build targets
 ##############################
-.PHONY: all lib test clean docs linecount lint lintclean tools examples lcm $(DIST_ALIASES) \
+.PHONY: all lib test clean docs linecount lint lintclean tools examples $(DIST_ALIASES) \
 	py mat py$(PROJECT) mat$(PROJECT) proto runtest \
 	superclean supercleanlist supercleanfiles warn everything
 
-all: lib tools examples lcm
+all: lib tools examples
 
 lib: $(STATIC_NAME) $(DYNAMIC_NAME)
 
@@ -458,7 +451,7 @@ everything: $(EVERYTHING_TARGETS)
 
 linecount:
 	cloc --read-lang-def=$(PROJECT).cloc \
-		src/$(PROJECT) include/$(PROJECT) tools examples lcm \
+		src/$(PROJECT) include/$(PROJECT) tools examples \
 		python matlab
 
 lint: $(EMPTY_LINT_REPORT)
@@ -496,8 +489,6 @@ test: $(TEST_ALL_BIN) $(TEST_ALL_DYNLINK_BIN) $(TEST_BINS)
 tools: $(TOOL_BINS) $(TOOL_BIN_LINKS)
 
 examples: $(EXAMPLE_BINS)
-
-lcm: $(LCM_BINS)
 
 py$(PROJECT): py
 
@@ -631,11 +622,6 @@ $(EXAMPLE_BINS): %.bin : %.o | $(DYNAMIC_NAME)
 	$(Q)$(CXX) $< -o $@ $(LINKFLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
 		-Wl,-rpath,$(ORIGIN)/../../lib
 
-$(LCM_BINS): %.bin : %.o | $(DYNAMIC_NAME)
-	@ echo CXX/LD -o $@
-	$(Q)$(CXX) $< -o $@ $(LINKFLAGS) -l$(LIBRARY_NAME) $(LDFLAGS) \
-		-Wl,-rpath,$(ORIGIN)/../../lib
-
 proto: $(PROTO_GEN_CC) $(PROTO_GEN_HEADER)
 
 $(PROTO_BUILD_DIR)/%.pb.cc $(PROTO_BUILD_DIR)/%.pb.h : \
@@ -694,7 +680,6 @@ $(DISTRIBUTE_DIR): all py | $(DISTRIBUTE_SUBDIRS)
 	# add tool and example binaries
 	cp $(TOOL_BINS) $(DISTRIBUTE_DIR)/bin
 	cp $(EXAMPLE_BINS) $(DISTRIBUTE_DIR)/bin
-	cp $(LCM_BINS) $(DISTRIBUTE_DIR)/bin
 	# add libraries
 	cp $(STATIC_NAME) $(DISTRIBUTE_DIR)/lib
 	install -m 644 $(DYNAMIC_NAME) $(DISTRIBUTE_DIR)/lib
