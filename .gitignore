@@ -93,3 +93,11 @@ LOCK
 LOG*
 CURRENT
 MANIFEST-*
+
+# LCM
+pod-build
+**/lcmtypes/c/
+**/lcmtypes/java/
+**/lcmtypes/python/
+**/lcmtypes/cpp/
+

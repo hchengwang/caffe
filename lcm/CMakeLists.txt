@@ -9,9 +9,15 @@ foreach(source_file ${lcm_srcs})
   # get folder name
   get_filename_component(path ${source_file} PATH)
   get_filename_component(folder ${path} NAME_WE)
-    
+  
+  find_library(rv-cv-bridge-lcm_LIBRARIES rv-cv-bridge-lcm ~/caffe/build/lib)
+  find_library(bot2-core_LIBRARIES bot2-core ~/caffe/build/lib)
+
   add_executable(${name} ${source_file})
-  target_link_libraries(${name} ${Caffe_LINK})
+  target_link_libraries(${name} ${Caffe_LINK} 
+  	lcm
+  	${rv-cv-bridge-lcm_LIBRARIES} 
+  	${bot2-core_LIBRARIES})
   caffe_default_properties(${name})
 
   # set back RUNTIME_OUTPUT_DIRECTORY

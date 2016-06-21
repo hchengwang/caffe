@@ -11,6 +11,14 @@
 #include <utility>
 #include <vector>
 
+#include <signal.h>
+#include <iostream>
+#include <fstream>
+#include <istream>
+#include <sstream>
+#include <string>
+
+#include <lcm/lcm.h>
 
 #ifdef USE_OPENCV
 using namespace caffe;  // NOLINT(build/namespaces)
@@ -227,6 +235,25 @@ void Classifier::Preprocess(const cv::Mat& img,
     << "Input channels are not wrapping the input layer of the network.";
 }
 
+void setup_signal_handlers(void (*handler)(int))
+{
+	struct sigaction new_action, old_action;
+	memset(&new_action, 0, sizeof(new_action));
+	new_action.sa_handler = handler;
+	sigemptyset(&new_action.sa_mask);
+
+	// Set termination handlers and preserve ignore flag.
+	sigaction(SIGINT, NULL, &old_action);
+	if (old_action.sa_handler != SIG_IGN)
+		sigaction(SIGINT, &new_action, NULL);
+	sigaction(SIGHUP, NULL, &old_action);
+	if (old_action.sa_handler != SIG_IGN)
+		sigaction(SIGHUP, &new_action, NULL);
+	sigaction(SIGTERM, NULL, &old_action);
+	if (old_action.sa_handler != SIG_IGN)
+		sigaction(SIGTERM, &new_action, NULL);
+}
+
 int main(int argc, char** argv) {
   if (argc != 6) {
     std::cerr << "Usage: " << argv[0]
@@ -247,6 +274,8 @@ int main(int argc, char** argv) {
 
   std::cout << "---------- Prediction for "
             << file << " ----------" << std::endl;
+
+  lcm_t* lcm = lcm_create(NULL);
 
   cv::Mat img = cv::imread(file, -1);
   CHECK(!img.empty()) << "Unable to decode image " << file;
