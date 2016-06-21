@@ -1,0 +1,122 @@
+10
+
+dir
+537
+https://svn.csail.mit.edu/bocelli/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/contrib
+https://svn.csail.mit.edu/bocelli
+
+
+
+2014-06-19T15:45:15.682415Z
+513
+hchengwang
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+c6c426b9-f48f-4fa1-afab-b92c32807645
+
+README.contrib
+file
+
+
+
+
+2014-07-19T21:04:46.144781Z
+07b7334256daa5e6a699030b23f66097
+2014-06-19T15:45:15.682415Z
+513
+hchengwang
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+3183
+
+vstudio
+dir
+
+masmx64
+dir
+
+inflate86
+dir
+
+puff
+dir
+
+testzlib
+dir
+
+masmx86
+dir
+
+pascal
+dir
+
+gcc_gvmat64
+dir
+
+iostream2
+dir
+
+delphi
+dir
+
+blast
+dir
+
+iostream3
+dir
+
+dotzlib
+dir
+
+untgz
+dir
+
+amd64
+dir
+
+minizip
+dir
+
+iostream
+dir
+
+asm686
+dir
+
+ada
+dir
+
+infback9
+dir
+

@@ -1,0 +1,14 @@
+# list of subdirectories to build, one one each line.  Empty lines
+# and lines starting with '#' are ignored
+
+libbot2
+
+geom-utils
+image-utils-2
+
+Eigen_pod
+
+jpeg-utils
+zlib-pod
+kinect-lcmtypes
+cv-bridge-lcm

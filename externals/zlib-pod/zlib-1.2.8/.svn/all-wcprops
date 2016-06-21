@@ -1,0 +1,269 @@
+K 25
+svn:wc:ra_dav:version-url
+V 68
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8
+END
+README
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/README
+END
+inftrees.c
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inftrees.c
+END
+zlib.3
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib.3
+END
+inflate.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inflate.c
+END
+uncompr.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/uncompr.c
+END
+inftrees.h
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inftrees.h
+END
+FAQ
+K 25
+svn:wc:ra_dav:version-url
+V 72
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/FAQ
+END
+inflate.h
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inflate.h
+END
+gzguts.h
+K 25
+svn:wc:ra_dav:version-url
+V 77
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/gzguts.h
+END
+zconf.h.in
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zconf.h.in
+END
+zconf.h.cmakein
+K 25
+svn:wc:ra_dav:version-url
+V 84
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zconf.h.cmakein
+END
+adler32.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/adler32.c
+END
+infback.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/infback.c
+END
+configure
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/configure
+END
+inffixed.h
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inffixed.h
+END
+Makefile.in
+K 25
+svn:wc:ra_dav:version-url
+V 80
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/Makefile.in
+END
+deflate.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/deflate.c
+END
+gzlib.c
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/gzlib.c
+END
+zutil.c
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zutil.c
+END
+deflate.h
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/deflate.h
+END
+zconf.h.included
+K 25
+svn:wc:ra_dav:version-url
+V 85
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zconf.h.included
+END
+gzread.c
+K 25
+svn:wc:ra_dav:version-url
+V 77
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/gzread.c
+END
+crc32.c
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/crc32.c
+END
+zlib2ansi
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib2ansi
+END
+zutil.h
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zutil.h
+END
+crc32.h
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/crc32.h
+END
+trees.c
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/trees.c
+END
+zlib.pc.in
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib.pc.in
+END
+INDEX
+K 25
+svn:wc:ra_dav:version-url
+V 74
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/INDEX
+END
+zlib.pc.cmakein
+K 25
+svn:wc:ra_dav:version-url
+V 84
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib.pc.cmakein
+END
+trees.h
+K 25
+svn:wc:ra_dav:version-url
+V 76
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/trees.h
+END
+zlib.3.pdf
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib.3.pdf
+END
+inffast.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inffast.c
+END
+gzwrite.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/gzwrite.c
+END
+compress.c
+K 25
+svn:wc:ra_dav:version-url
+V 79
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/compress.c
+END
+zlib.map
+K 25
+svn:wc:ra_dav:version-url
+V 77
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib.map
+END
+CMakeLists.txt
+K 25
+svn:wc:ra_dav:version-url
+V 83
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/CMakeLists.txt
+END
+Makefile
+K 25
+svn:wc:ra_dav:version-url
+V 77
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/Makefile
+END
+treebuild.xml
+K 25
+svn:wc:ra_dav:version-url
+V 82
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/treebuild.xml
+END
+make_vms.com
+K 25
+svn:wc:ra_dav:version-url
+V 81
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/make_vms.com
+END
+inffast.h
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/inffast.h
+END
+zlib.h
+K 25
+svn:wc:ra_dav:version-url
+V 75
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/zlib.h
+END
+ChangeLog
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/ChangeLog
+END
+gzclose.c
+K 25
+svn:wc:ra_dav:version-url
+V 78
+/bocelli/!svn/ver/513/projects/bvi-nav/externals/zlib-pod/zlib-1.2.8/gzclose.c
+END
