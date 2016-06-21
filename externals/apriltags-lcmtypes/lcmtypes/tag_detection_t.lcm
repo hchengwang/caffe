@@ -1,0 +1,40 @@
+// A single AprilTag tag detection
+
+package april_tags;
+struct tag_detection_t {
+	// Is the detection good enough?
+	boolean good;
+
+	// Observed code
+	int64_t observed_code;
+
+	// Matced code
+	int64_t code;
+
+	// ID of the detected tag.
+	int32_t id;
+
+	// The hamming distance between the detected code and the true code.
+	int32_t hamming_distance;
+
+	// Position (in fractional pixel coordinates) of the detection.
+	// The points travel counter-clockwise around te target, always
+	// starting from the same corner of the tag.
+	double points[8];
+
+	// Center of tag in pixel coordinates
+	double cxy[2];
+
+	// The homography of the tag. Row major ordering.
+	double homography[9];
+
+	// The homography is relative to image center, whose coordinates are below.
+	double hxy[2];
+
+	// Pose of the tag in the camera coordinate frame.
+        // translation in meters along x,y,z axis.
+        double position[3];
+        // orientation as a Quaternion x,y,z,w (follows convention in Eigen)
+        double orientation[4]; 
+}
+

@@ -1,0 +1,15 @@
+package april_tags;
+struct tag_text_detections_t {
+  int64_t utime;
+  int32_t n;
+  tag_text_detection_t detections[n];
+    
+  // Camera pose in the global frame by Tango VIO
+  // translation in meters along x,y,z axis.
+  double cam_position[3];
+  // orientation as a Quaternion x,y,z,w (follows convention in Eigen)
+  double cam_orientation[4]; 
+  
+  string veh;
+}
+

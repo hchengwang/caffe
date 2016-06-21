@@ -12,3 +12,5 @@ jpeg-utils
 zlib-pod
 kinect-lcmtypes
 cv-bridge-lcm
+
+apriltags-lcmtypes

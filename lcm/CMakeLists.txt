@@ -9,15 +9,25 @@ foreach(source_file ${lcm_srcs})
   # get folder name
   get_filename_component(path ${source_file} PATH)
   get_filename_component(folder ${path} NAME_WE)
+
+  include_directories(
+    "~/caffe/build/include"
+    /usr/include/glib-2.0
+    /usr/lib/x86_64-linux-gnu/glib-2.0/include
+    /usr/lib/arm-linux-gnueabihf/glib-2.0/include
+    )
+
   
   find_library(rv-cv-bridge-lcm_LIBRARIES rv-cv-bridge-lcm ~/caffe/build/lib)
   find_library(bot2-core_LIBRARIES bot2-core ~/caffe/build/lib)
-
+  find_library(lcmtypes_april_tags_LIBRARIES lcmtypes_april_tags ~/caffe/build/lib)
+      
   add_executable(${name} ${source_file})
   target_link_libraries(${name} ${Caffe_LINK} 
   	lcm
   	${rv-cv-bridge-lcm_LIBRARIES} 
-  	${bot2-core_LIBRARIES})
+  	${bot2-core_LIBRARIES}
+  	${lcmtypes_april_tags_LIBRARIES})
   caffe_default_properties(${name})
 
   # set back RUNTIME_OUTPUT_DIRECTORY

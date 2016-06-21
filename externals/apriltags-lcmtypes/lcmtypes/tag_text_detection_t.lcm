@@ -1,0 +1,81 @@
+// A single AprilTag tag detection
+
+package april_tags;
+struct tag_text_detection_t {
+
+	// for multi veh
+	string veh;
+
+	// Is the detection good enough?
+	boolean good;
+
+	// Observed code
+	int64_t observed_code;
+
+	// Matced code
+	int64_t code;
+
+	// physical size
+	double tag_size;
+	
+	double height;
+	double width;
+	
+	// ID of the detected tag.
+	int32_t id;
+	
+	// 1: Apriltags, 2: Text
+	int32_t detection_type;
+	
+	// The hamming distance between the detected code and the true code.
+	int32_t hamming_distance;
+
+	// Position (in fractional pixel coordinates) of the detection.
+	// The points travel counter-clockwise around te target, always
+	// starting from the same corner of the tag.
+	double points[8];	// pixel coordinates;
+	double points_3d[12];	// 3d coordinates;
+
+	// Center of tag in pixel coordinates
+	double cxy[2];
+	double tl_xy[2];
+	
+	// The homography of the tag. Row major ordering.
+	double homography[9];
+
+	// The homography is relative to image center, whose coordinates are below.
+	double hxy[2];
+
+	// Pose of the tag in the camera coordinate frame.
+    // translation in meters along x,y,z axis.
+    double position[3];
+    // orientation as a Quaternion x,y,z,w (follows convention in Eigen)
+    double orientation[4]; 
+
+	// Camera pose in the global frame by Tango VIO
+	// Those are replicated the ones in tag_text_detections_t
+    // translation in meters along x,y,z axis.
+    double cam_position[3];
+    // orientation as a Quaternion x,y,z,w (follows convention in Eigen)
+    double cam_orientation[4]; 
+
+	// calibration matrix
+	double px;
+	double py;
+	double fx;
+	double fy;
+	double k1;
+	double k2;
+	double p1;
+	double p2;
+	
+	// detected text
+	string text_str;
+	
+	// confidence
+	double conf;
+	
+	// is tp
+	int32_t gt_hit;
+}
+

@@ -1,0 +1,34 @@
+This software is constructed according to the Pods software policies and
+templates.  The policies and templates can be found at:
+
+  http://sourceforge.net/projects/pods
+
+====
+
+Name:         april_tags_lcm
+Maintainers:  Hordur Johannsson <hordurj@csail.mit.edu>
+Summary:      A LCM application for the April Tags.
+Description:
+  A LCM application for the April Tags.
+
+Requirements: 
+  lcm
+  Eigen3
+
+Pods:
+  libbot2   (https://svn.csail.mit.edu/libbot2)
+  AprilTags  (https://svn.csail.mit.edu/marine/pods/AprilTags)
+
+The Eigen library is available as a pod
+  Eigen_pod  (https://svn.csail.mit.edu/Eigen_pod)
+
+Ubuntu packages:
+
+License:      No license available
+
+Caffe Settings in ~/.bashrc
+# caffe
+export CAFFE_ROOT=$HOME/caffe
+export LD_LIBRARY_PATH=$CAFFE_ROOT/build/lib:$LD_LIBRARY_PATH
+export PYTHONPATH=$CAFFE_ROOT/python:$HOME/matlab_ws:$PYTHONPATH
+export CAFFE_DATA=$HOME/caffe
