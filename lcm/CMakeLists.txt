@@ -27,7 +27,8 @@ foreach(source_file ${lcm_srcs})
   	lcm
   	${rv-cv-bridge-lcm_LIBRARIES} 
   	${bot2-core_LIBRARIES}
-  	${lcmtypes_april_tags_LIBRARIES})
+  	${lcmtypes_april_tags_LIBRARIES}
+  	boost_system boost_filesystem)
   caffe_default_properties(${name})
 
   # set back RUNTIME_OUTPUT_DIRECTORY

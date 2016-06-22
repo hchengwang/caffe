@@ -18,6 +18,8 @@
 #include <sstream>
 #include <string>
 
+#include <boost/filesystem.hpp>
+
 #include <lcm/lcm.h>
 #include <bot_core/bot_core.h>
 #include <cv_bridge_lcm/rv-cv-bridge-lcm.h>
@@ -27,7 +29,6 @@
 #include <lcmtypes/april_tags_tag_text_detection_t.h>
 #include <lcmtypes/april_tags_tag_text_detections_t.h>
 
-#ifdef USE_OPENCV
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;
 
@@ -327,6 +328,32 @@ void Classifier::on_tag_text_detections_aux( const lcm_recv_buf_t* rbuf,
 	(static_cast<Classifier *>(user_data))->on_tag_text_detections(detections);
 }
 
+void read_frames(string image_folder,
+		vector<string> &frames_to_process, vector<string> &frames_names){
+
+	boost::filesystem::path image_path(image_folder);
+	boost::filesystem::recursive_directory_iterator end_it;
+
+
+	//load files
+	for (boost::filesystem::recursive_directory_iterator it(image_path); it != end_it; ++it) {
+
+		//////////////////////////////////////////////////////////
+		// read image
+		if ((it->path().extension().string() == ".jpg"
+				|| it->path().extension().string() == ".png"
+						|| it->path().extension().string() == ".jpeg")
+		){
+
+			frames_to_process.push_back(it->path().string());
+			frames_names.push_back(it->path().stem().string());
+		}
+	}
+	// sort the image files
+	sort(frames_to_process.begin(), frames_to_process.end());
+
+}
+
 void setup_signal_handlers(void (*handler)(int))
 {
 	struct sigaction new_action, old_action;
@@ -347,10 +374,22 @@ void setup_signal_handlers(void (*handler)(int))
 }
 
 int main(int argc, char** argv) {
-	if (argc != 6) {
+	if (argc < 6) {
 		std::cerr << "Usage: " << argv[0]
-		                               << " deploy.prototxt network.caffemodel"
-		                               << " mean.binaryproto labels.txt img.jpg" << std::endl;
+		    << " deploy.prototxt network.caffemodel"
+		    << " mean.binaryproto labels.txt img.jpg"  << std::endl
+		    << "Example 1 (file): " << std::endl
+		    << argv[0]
+		    << " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt examples/images/cat.jpg"
+		    << std::endl
+			<< "Example 2 (folder): " << std::endl
+			<< argv[0]
+			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt folder examples/images/"
+			<< std::endl
+			<< "Example 3 (lcm): " << std::endl
+			<< argv[0]
+			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt lcm IMAGE_PICAMERA_wama"
+			<< std::endl;
 		return 1;
 	}
 
@@ -362,30 +401,62 @@ int main(int argc, char** argv) {
 	string label_file   = argv[4];
 	Classifier classifier(model_file, trained_file, mean_file, label_file);
 
-	string file = argv[5];
+	if(std::strcmp(argv[5], "file") == 0){
 
-	std::cout << "---------- Prediction for "
-			<< file << " ----------" << std::endl;
+		string file = argv[6];
+		std::cout << "---------- Prediction for "
+				<< file << " ----------" << std::endl;
 
-	cv::Mat img = cv::imread(file, -1);
-	CHECK(!img.empty()) << "Unable to decode image " << file;
-	std::vector<Prediction> predictions = classifier.Classify(img);
+		cv::Mat img = cv::imread(file, -1);
+		CHECK(!img.empty()) << "Unable to decode image " << file;
+		std::vector<Prediction> predictions = classifier.Classify(img);
 
-	/* Print the top N predictions. */
-	for (size_t i = 0; i < predictions.size(); ++i) {
-		Prediction p = predictions[i];
-		std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
-				<< p.first << "\"" << std::endl;
+		/* Print the top N predictions. */
+		for (size_t i = 0; i < predictions.size(); ++i) {
+			Prediction p = predictions[i];
+			std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
+					<< p.first << "\"" << std::endl;
+		}
+
+	}else if(std::strcmp(argv[5], "folder") == 0){
+
+		string image_folder = argv[6];
+
+		vector<string> frames_to_process;
+		vector<string> frames_name;
+		read_frames(image_folder, frames_to_process, frames_name);
+
+		for(int f = 0; f < frames_to_process.size(); f++){
+
+			std::cout << "---------- Prediction for "
+					<< frames_to_process[f] << " ----------" << std::endl;
+
+			cv::Mat img = cv::imread(frames_to_process[f], -1);
+
+			CHECK(!img.empty()) << "Unable to decode image " << frames_to_process[f];
+			std::vector<Prediction> predictions = classifier.Classify(img);
+
+			/* Print the top N predictions. */
+			for (size_t i = 0; i < predictions.size(); ++i) {
+				Prediction p = predictions[i];
+				std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
+						<< p.first << "\"" << std::endl;
+			}
+
+		}
+
+	}else if(std::strcmp(argv[5], "lcm") == 0){
+
+		string image_channel = argv[6];
+
+		lcm_t* lcm = lcm_create(NULL);
+		classifier.set_lcm(lcm, image_channel);
+		std::cout << "---------- Prediction for "
+				<< "lcm input channel " << image_channel << " ----------" << std::endl;
+
+		classifier.run();
+
 	}
 
-	std::string image_channel = "IMAGE_PICAMERA_wama";
-	lcm_t* lcm = lcm_create(NULL);
-	classifier.set_lcm(lcm, image_channel);
-	classifier.run();
+}
 
-}
-#else
-int main(int argc, char** argv) {
-	LOG(FATAL) << "This example requires OpenCV; compile with USE_OPENCV.";
-}
-#endif  // USE_OPENCV
