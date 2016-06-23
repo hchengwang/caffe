@@ -18,16 +18,19 @@ foreach(source_file ${lcm_srcs})
     )
 
   
-  find_library(rv-cv-bridge-lcm_LIBRARIES rv-cv-bridge-lcm ~/caffe/build/lib)
-  find_library(bot2-core_LIBRARIES bot2-core ~/caffe/build/lib)
-  find_library(lcmtypes_april_tags_LIBRARIES lcmtypes_april_tags ~/caffe/build/lib)
-      
+  # find_library(rv-cv-bridge-lcm_LIBRARIES rv-cv-bridge-lcm ~/caffe/build/lib)
+  # find_library(bot2-core_LIBRARIES bot2-core ~/caffe/build/lib)
+  # find_library(lcmtypes_april_tags_LIBRARIES lcmtypes_april_tags ~/caffe/build/lib)
+  
+  link_directories(~/caffe/build/lib)
+  
   add_executable(${name} ${source_file})
   target_link_libraries(${name} ${Caffe_LINK} 
   	lcm
-  	${rv-cv-bridge-lcm_LIBRARIES} 
-  	${bot2-core_LIBRARIES}
-  	${lcmtypes_april_tags_LIBRARIES}
+  	rv-cv-bridge-lcm bot2-core lcmtypes_april_tags
+  	#${rv-cv-bridge-lcm_LIBRARIES} 
+  	#${bot2-core_LIBRARIES}
+  	#${lcmtypes_april_tags_LIBRARIES}
   	boost_system boost_filesystem)
   caffe_default_properties(${name})
 

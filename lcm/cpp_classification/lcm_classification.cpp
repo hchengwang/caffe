@@ -32,6 +32,8 @@
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;
 
+#define CPU_ONLY
+
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
 
@@ -45,6 +47,7 @@ public:
 	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
 
 	void set_lcm(lcm_t* lcm, std::string image_channel);
+	void set_cpu(int is_cpu);
 	void run();
 	void finish();
 
@@ -74,6 +77,8 @@ private:
 
 private:
 	shared_ptr<Net<float> > net_;
+	int is_cpu_;
+
 	cv::Size input_geometry_;
 	int num_channels_;
 	cv::Mat mean_;
@@ -88,17 +93,19 @@ private:
     //brian
     cv::Mat image;
     //
+
 };
 
 Classifier::Classifier(const string& model_file,
 		const string& trained_file,
 		const string& mean_file,
 		const string& label_file) {
-#ifdef CPU_ONLY
-Caffe::set_mode(Caffe::CPU);
-#else
-	Caffe::set_mode(Caffe::GPU);
-#endif
+
+	if(this->is_cpu_ > 0){
+		Caffe::set_mode(Caffe::CPU);
+	}else{
+		Caffe::set_mode(Caffe::GPU);
+	}
 
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));
@@ -114,7 +121,9 @@ Caffe::set_mode(Caffe::CPU);
 	input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
 
 	/* Load the binaryproto mean file. */
-	SetMean(mean_file);
+	if(boost::filesystem::exists(mean_file)){
+		SetMean(mean_file);
+	}
 
 	/* Load labels. */
 	std::ifstream labels(label_file.c_str());
@@ -150,6 +159,9 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
 
 }
 
+void Classifier::set_cpu(int is_cpu){
+	this->is_cpu_ = 1;
+}
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
 }
@@ -301,17 +313,36 @@ void Classifier::Preprocess(const cv::Mat& img,
 	<< "Input channels are not wrapping the input layer of the network.";
 }
 
-void Classifier::on_tag_text_detection (
-		const april_tags_tag_text_detection_t detection) {
-}
-
 void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 	std::cout << "img" << std::endl;
+
+//	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+//	cv::Mat im_vis = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+//
+//	if(image_msg->pixelformat == BOT_CORE_IMAGE_T_PIXEL_FORMAT_MJPEG){
+//		// jpeg decompress
+//	    jpegijg_decompress_8u_rgb (image_msg->data, image_msg->size,
+//	    		im_rgb.data, image_msg->width, image_msg->height, image_msg->width * 3);
+//	}else {
+//		im_rgb.data = image_msg->data;
+//	}
+//        //brian
+//        this->image = im_rgb;
+//        //
+//	cv::Mat im_rect = cv::Mat::zeros(im_rgb.rows, im_rgb.cols, CV_8UC1);
+//	cv::cvtColor(im_rgb, im_rect, CV_RGB2GRAY);
+	// TODO: rectify image
+}
+
+void Classifier::on_tag_text_detection (
+		const april_tags_tag_text_detection_t detection) {
 }
 
 void Classifier::on_tag_text_detections (
 		const april_tags_tag_text_detections_t* detections) {
 	std::cout << "bbox" << std::endl;
+
+
 }
 
 void Classifier::on_libbot_aux(const lcm_recv_buf_t* rbuf,
@@ -401,6 +432,10 @@ int main(int argc, char** argv) {
 	string label_file   = argv[4];
 	Classifier classifier(model_file, trained_file, mean_file, label_file);
 
+	if(std::strcmp(argv[7], "CPU") == 0){
+		classifier.set_cpu(1);
+	}
+
 	if(std::strcmp(argv[5], "file") == 0){
 
 		string file = argv[6];
@@ -457,6 +492,7 @@ int main(int argc, char** argv) {
 		classifier.run();
 
 	}
+
 
 }
 
