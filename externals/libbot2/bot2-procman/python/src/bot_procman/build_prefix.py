@@ -1,1 +1,1 @@
-BUILD_PREFIX='/home/hchengwang/caffe/build'
+BUILD_PREFIX='/home/joinet/caffe/build'
