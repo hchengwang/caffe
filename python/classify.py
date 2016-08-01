@@ -20,6 +20,11 @@ def main(argv):
     parser = argparse.ArgumentParser()
     # Required arguments: input and output files.
     parser.add_argument(
+	"--print_results",
+	action="store_true",
+	help="write"
+    )
+    parser.add_argument(
         "input_file",
         help="Input image, directory, or npy."
     )
