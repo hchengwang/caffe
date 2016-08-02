@@ -101,3 +101,5 @@ pod-build
 **/lcmtypes/python/
 **/lcmtypes/cpp/
 
+# Image
+examples/images/*.jpg
