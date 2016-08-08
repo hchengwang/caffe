@@ -103,3 +103,5 @@ pod-build
 
 # Image
 examples/images/*.jpg
+examples/jr-station/*.txt
+
