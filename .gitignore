@@ -103,5 +103,6 @@ pod-build
 
 # Image
 examples/images/*.jpg
-examples/jr-station/*.txt
-
+examples/jr-station/test.txt
+examples/jr-station/file.txt
+examples/jr-station/train.txt
