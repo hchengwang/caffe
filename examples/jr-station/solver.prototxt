@@ -1,4 +1,4 @@
-net: "examples/jr-station/Dict.prototxt"
+net: "examples/jr-station/part_Dict.prototxt"
 test_iter: 16055
 test_interval: 1000
 base_lr: 0.001
