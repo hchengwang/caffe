@@ -1,23 +1,22 @@
 name: "Bigram_Net_VGG"
-
-input: "data"
-input_shape {
-  dim: 1
-  dim: 3
-  dim: 32
-  dim: 100
+input:"data"
+layer{
+  name: "data"
+  type: "Input"
+  top: "data"
+  input_param{ shape: { dim: 1 dim: 3 dim: 32 dim: 100}}
 }
 
-layers {
-  name: "eccv_train"
-  type: "Data"
-  top: "data"
-  top: "label"  
+#layer {
+#  name: "data"
+#  type: "Data"
+#  top: "data"
+#  top: "label"  
 
-  include{
-    phase: TRAIN
-  }
-  transform_param {
+#  include{
+#    phase: TRAIN
+#  }
+   transform_param {
    #  crop_size: 24  
    #  mean_value: 104
    #  mean_value: 117
@@ -32,8 +31,8 @@ layers {
    
 }
 
-layers {
-  name: "eccv_train"
+layer {
+  name: "data"
   type: "Data"
   top: "data"
   top: "label"
@@ -50,7 +49,7 @@ layers {
   }
   data_param {
      source: "examples/jr-station/img_test_lmdb"
-     batch_size: 5
+     batch_size: 50
      backend: LMDB
   }
   
@@ -60,7 +59,7 @@ layer {
   name: "conv1"
   type: "Convolution"
   bottom: "data"
-  top: "relu1"
+  top: "conv1"
 
   param {
     lr_mult: 1
@@ -90,14 +89,14 @@ layer {
   name: "relu1"
   type: "ReLU"
   bottom: "conv1"
-  top: "pool1"
+  top: "conv1"
 }
 
 layer {
   name: "pool1"
   type: "Pooling"
-  bottom: "relu1"
-  top: "conv2"
+  bottom: "conv1"
+  top: "pool1"
   pooling_param {
     pool: MAX
     kernel_size: 2
@@ -109,8 +108,8 @@ layer {
 layer {
   name: "conv2"
   type: "Convolution"
-  bottom: "pool1"
-  top: "relu2"
+  bottom: "conv1"
+  top: "conv2"
 
   param {
     lr_mult: 1
@@ -140,14 +139,14 @@ layer {
   name: "relu2"
   type: "ReLU"
   bottom: "conv2"
-  top: "pool2"
+  top: "conv2"
 }
 
 layer {
   name: "pool2"
   type: "Pooling"
-  bottom: "relu2"
-  top: "conv3"
+  bottom: "conv2"
+  top: "pool2"
   pooling_param {
     pool: MAX
     kernel_size: 2
@@ -158,8 +157,8 @@ layer {
 layer {
   name: "conv3"
   type: "Convolution"
-  bottom: "pool2"
-  top: "relu3"
+  bottom: "conv2"
+  top: "conv3"
 
   param {
     lr_mult: 1
@@ -189,14 +188,14 @@ layer {
   name: "relu3"
   type: "ReLU"
   bottom: "conv3"
-  top: "conv3.5"
+  top: "conv3"
 }
 
 layer {
   name: "conv3.5"
   type: "Convolution"
-  bottom: "relu3"
-  top: "relu4"
+  bottom: "conv3"
+  top: "conv3.5"
 
   param {
     lr_mult: 1
@@ -226,14 +225,14 @@ layer {
   name: "relu3.5"
   type: "ReLU"
   bottom: "conv3.5"
-  top: "pool3"
+  top: "conv3.5"
 }
 
 layer {
   name: "pool3"
   type: "Pooling"
-  bottom: "relu3.5"
-  top: "conv4"
+  bottom: "conv3.5"
+  top: "pool3"
   pooling_param {
     pool: MAX
     kernel_size: 2
@@ -244,8 +243,8 @@ layer {
 layer {
   name: "conv4"
   type: "Convolution"
-  bottom: "pool3"
-  top: "relu4"
+  bottom: "conv3"
+  top: "conv4"
 
   param {
     lr_mult: 1
@@ -275,7 +274,7 @@ layer {
   name: "relu4"
   type: "ReLU"
   bottom: "conv4"
-  top: "fc1"
+  top: "conv4"
 }
 
 
@@ -283,8 +282,8 @@ layer {
 layer {
   name: "fc1"
   type: "Convolution"
-  bottom: "relu4"
-  top: "relu5"
+  bottom: "conv4"
+  top: "fc1"
   param {
     lr_mult: 1
     decay_mult: 1
@@ -313,14 +312,14 @@ layer {
   name: "relu5"
   type: "ReLU"
   bottom: "fc1"
-  top: "fc2"
+  top: "fc1"
 }
 
 layer {
   name: "fc2"
   type: "Convolution"
-  bottom: "relu5"
-  top: "relu6"
+  bottom: "fc1"
+  top: "fc2"
   param {
     lr_mult: 1
     decay_mult: 1
@@ -349,14 +348,14 @@ layer {
   name: "relu6"
   type: "ReLU"
   bottom: "fc2"
-  top: "probs"
+  top: "fc2"
 }
 
 layer {
   name: "fc_classes"
   type: "Convolution"
-  bottom: "relu6"
-  top: "probs"
+  bottom: "fc2"
+  top: "fc_classes"
   param {
     lr_mult: 1
     decay_mult: 1
@@ -382,8 +381,21 @@ layer {
 }
 
 layer {
+  name: "accuracy"
+  type: "Accuracy"
+  bottom: "fc_classes"
+  bottom: "label"
+  top: "accuracy"
+  include {
+    phase: TEST
+  }
+}
+
+
+layer {
   name: "probs"
   type: "Softmax"
-  bottom: "relu5"
+  bottom: "fc_classes"
+#  bottom: "label"
   top: "probs"
 }
