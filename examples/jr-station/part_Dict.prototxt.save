@@ -49,7 +49,7 @@ layer {
  }
  data_param {
     source: "examples/jr-station/img_part_test_lmdb"
-    batch_size: 3
+    batch_size: 50
     backend: LMDB
  }
   
@@ -194,7 +194,7 @@ layer {
 layer {
   name: "conv3.5"
   type: "Convolution"
-  bottom: "conv3"
+  bottom: "relu"
   top: "conv3.5"
 
   param {
@@ -243,7 +243,7 @@ layer {
 layer {
   name: "conv4"
   type: "Convolution"
-  bottom: "pool3"
+  bottom: "conv3.5"
   top: "conv4"
 
   param {
@@ -329,7 +329,7 @@ layer {
     lr_mult: 2
     decay_mult: 0
   }
-  inner_product_param {
+  convolution_param {
     num_output: 4096
 #    kernel_size : 1
  #   stride: 1
@@ -365,7 +365,7 @@ layer {
     lr_mult: 2
     decay_mult: 0
   }
-  inner_product_param {
+  convolution_param {
     num_output: 88172
  #   kernel_size : 1
   #  stride: 1
@@ -396,7 +396,7 @@ layer {
 #layer {
  # name: "probs"
  # type: "Softmax"
-  #bottom: "fc_classes"
-  #bottom: "label"
-  #top: "probs"
+ # bottom: "fc_classes"
+ # bottom: "label"
+ # top: "probs"
 #}
