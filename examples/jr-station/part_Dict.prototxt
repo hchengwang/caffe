@@ -24,10 +24,11 @@ layer {
    #  mirror: true
   }
   data_param {
-     source: "examples/jr-station/img_part_lmdb"
-     batch_size: 5   # can modified
+     source: "examples/jr-station/img_part_train_lmdb"
+     batch_size: 20   # can modified
      backend: LMDB
   }
+input_param{ shape: { dim: 1 dim: 1 dim: 32 dim: 100}}
    
 }
 
@@ -49,9 +50,10 @@ layer {
  }
  data_param {
     source: "examples/jr-station/img_part_test_lmdb"
-    batch_size: 3
+    batch_size: 1
     backend: LMDB
  }
+input_param{ shape: { dim: 1 dim: 1 dim: 32 dim: 100}}
   
 }
 
@@ -277,11 +279,9 @@ layer {
   top: "conv4"
 }
 
-
-
 layer {
   name: "fc1"
-  type: "InnerProduct"
+  type: "Convolution"
   bottom: "conv4"
   top: "fc1"
   param {
@@ -292,12 +292,12 @@ layer {
     lr_mult: 2
     decay_mult: 0
   }
-  inner_product_param {
+  convolution_param {
     num_output: 4096
-#    kernel_h :4
- #   kernel_w :13 
-  #  stride: 1
-   # pad: 0
+    kernel_w : 13
+    kernel_h : 4
+    stride: 1
+    pad: 0
     weight_filler {
       type: "gaussian"
       std: 0.01
@@ -308,17 +308,15 @@ layer {
     }
   }
 }
-
 layer {
   name: "relu5"
   type: "ReLU"
   bottom: "fc1"
   top: "fc1"
 }
-
 layer {
   name: "fc2"
-  type: "InnerProduct"
+  type: "Convolution"
   bottom: "fc1"
   top: "fc2"
   param {
@@ -329,11 +327,11 @@ layer {
     lr_mult: 2
     decay_mult: 0
   }
-  inner_product_param {
+  convolution_param {
     num_output: 4096
-#    kernel_size : 1
- #   stride: 1
-  #  pad: 0
+    kernel_size : 1
+    stride: 1
+    pad: 0
     weight_filler {
       type: "gaussian"
       std: 0.01
@@ -344,19 +342,17 @@ layer {
     }
   }
 }
-
 layer {
   name: "relu6"
   type: "ReLU"
   bottom: "fc2"
   top: "fc2"
 }
-
 layer {
-  name: "fc_classes"
-  type: "InnerProduct"
+  name: "fc_class"
+  type: "Convolution"
   bottom: "fc2"
-  top: "fc_classes"
+  top: "fc_class"
   param {
     lr_mult: 1
     decay_mult: 1
@@ -365,11 +361,11 @@ layer {
     lr_mult: 2
     decay_mult: 0
   }
-  inner_product_param {
+  convolution_param {
     num_output: 88172
- #   kernel_size : 1
-  #  stride: 1
-   # pad: 0
+    kernel_size : 1
+    stride: 1
+    pad: 0
     weight_filler {
       type: "gaussian"
       std: 0.01
@@ -380,23 +376,9 @@ layer {
     }
   }
 }
-
 layer {
-  name: "accuracy"
-  type: "Accuracy"
-  bottom: "fc_classes"
-  bottom: "label"
-  top: "accuracy"
-  include {
-    phase: TEST
-  }
+  name: "prob"
+  type: "Softmax"
+  bottom: "fc_class"
+  top: "prob"
 }
-
-
-#layer {
- # name: "probs"
- # type: "Softmax"
-  #bottom: "fc_classes"
-  #bottom: "label"
-  #top: "probs"
-#}
