@@ -315,3 +315,12 @@ layer {
   bottom: "fc_class"
   top: "prob"
 }
+
+
+layer {
+  name: "loss"
+  type: "SoftmaxWithLoss"
+  bottom: "fc_class"
+  bottom: "label"
+  top: "loss"
+}
