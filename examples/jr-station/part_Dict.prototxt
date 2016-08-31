@@ -25,7 +25,7 @@ layer {
   }
   data_param {
      source: "examples/jr-station/img_part_train_lmdb"
-     batch_size: 500   # can modified
+     batch_size: 300   # can modified
      backend: LMDB
   }
 input_param{ shape: { dim: 1 dim: 1 dim: 32 dim: 100}}
@@ -50,7 +50,7 @@ layer {
  }
  data_param {
     source: "examples/jr-station/img_part_test_lmdb"
-    batch_size: 200
+    batch_size: 300
     backend: LMDB
  }
 input_param{ shape: { dim: 1 dim: 1 dim: 32 dim: 100}}
@@ -346,7 +346,7 @@ layer {
     decay_mult: 0
   }
   convolution_param {
-    num_output: 88172
+    num_output: 10000
     kernel_size : 1
     stride: 1
     pad: 0

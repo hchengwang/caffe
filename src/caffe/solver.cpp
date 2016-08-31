@@ -178,6 +178,7 @@ void Solver<Dtype>::InitTestNets() {
       net_state.MergeFrom(param_.test_state(i));
     }
     net_params[i].mutable_state()->CopyFrom(net_state);
+    if(i%100000==0)
     LOG(INFO)
         << "Creating test net (#" << i << ") specified by " << sources[i];
     if (Caffe::root_solver()) {
