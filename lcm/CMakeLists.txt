@@ -17,7 +17,8 @@ foreach(source_file ${lcm_srcs})
     /usr/lib/arm-linux-gnueabihf/glib-2.0/include
     )
 
-  
+  find_package(OpenCV 2.4 REQUIRED)
+  include_directories(${OpenCV_INCLUDE_DIRS})
   # find_library(rv-cv-bridge-lcm_LIBRARIES rv-cv-bridge-lcm ~/caffe/build/lib)
   # find_library(bot2-core_LIBRARIES bot2-core ~/caffe/build/lib)
   # find_library(lcmtypes_april_tags_LIBRARIES lcmtypes_april_tags ~/caffe/build/lib)
@@ -27,11 +28,13 @@ foreach(source_file ${lcm_srcs})
   add_executable(${name} ${source_file})
   target_link_libraries(${name} ${Caffe_LINK} 
   	lcm
-  	rv-cv-bridge-lcm bot2-core lcmtypes_april_tags
+  	rv-cv-bridge-lcm bot2-core lcmtypes_april_tags jpeg-utils
+	${OpenCV_LIBS}
   	#${rv-cv-bridge-lcm_LIBRARIES} 
   	#${bot2-core_LIBRARIES}
   	#${lcmtypes_april_tags_LIBRARIES}
   	boost_system boost_filesystem)
+	
   caffe_default_properties(${name})
 
   # set back RUNTIME_OUTPUT_DIRECTORY

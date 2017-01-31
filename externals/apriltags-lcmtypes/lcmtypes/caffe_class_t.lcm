@@ -1,0 +1,8 @@
+package april_tags;
+struct caffe_class_t {
+  string class0;
+  string class1;
+  string class2;
+  string class3;
+  string class4;
+}
