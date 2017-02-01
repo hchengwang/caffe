@@ -69,6 +69,7 @@ public:
 
 	// Message Handler
 	void on_libbot(const bot_core_image_t *msg);
+	void on_libbot_daniel(const bot_core_image_t *msg);
 	static void on_libbot_aux(const lcm_recv_buf_t* rbuf,
 			const char* channel,
 			const bot_core_image_t* msg,
@@ -333,7 +334,7 @@ void Classifier::Preprocess(const cv::Mat& img,
 	<< "Input channels are not wrapping the input layer of the network.";
 }
 
-void Classifier::on_libbot(const bot_core_image_t* image_msg) {
+void Classifier::on_libbot_daniel(const bot_core_image_t* image_msg) {
 	std::cout << "callback" << std::endl;
 	start_time = bot_timestamp_now();
 //Modified for text detection by Daniel
@@ -451,6 +452,56 @@ for(int i=0; i<4; i++){
 //	cv::Mat im_rect = cv::Mat::zeros(im_rgb.rows, im_rgb.cols, CV_8UC1);
 //	cv::cvtColor(im_rgb, im_rect, CV_RGB2GRAY);
 	// TODO: rectify image
+}
+
+void Classifier::on_libbot(const bot_core_image_t* image_msg) {
+	std::cout << "img" << std::endl;
+
+	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+	cv::Mat im_vis = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+	
+	if(image_msg->pixelformat == BOT_CORE_IMAGE_T_PIXEL_FORMAT_MJPEG){
+//		// jpeg decompress
+		jpegijg_decompress_8u_rgb (image_msg->data, image_msg->size,im_rgb.data, image_msg->width, image_msg->height, image_msg->width * 3);
+	}else {
+		im_rgb.data = image_msg->data;
+	}
+	//im_rgb.data = image_msg->data;
+//        //brian
+//        this->image = im_rgb;
+//        //
+	cv::Mat im_rect = cv::Mat::zeros(im_rgb.rows, im_rgb.cols, CV_8UC1);
+	cv::cvtColor(im_rgb, im_rect, CV_RGB2GRAY);
+	// TODO: rectify image
+	cv::Mat img;
+	//cv::Mat img = cv::imread(file, -1);
+	img = im_rect;
+	CHECK(!img.empty()) << "Unable to decode image ";
+
+	std::vector<Prediction> predictions = this->Classify(img, 20);
+
+	/* Print the top N predictions. */
+	for (size_t i = 0; i < predictions.size(); ++i) {
+		Prediction p = predictions[i];
+		std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
+				<< p.first << "\"" << std::endl;
+	}
+
+	char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
+	strcpy(temp0, predictions[0].first.c_str());
+	strcpy(temp1, predictions[1].first.c_str());
+	strcpy(temp2, predictions[2].first.c_str());
+	strcpy(temp3, predictions[3].first.c_str());
+	strcpy(temp4, predictions[4].first.c_str());
+
+	caffe_class_.class0=temp0;
+	caffe_class_.class1=temp1;
+	caffe_class_.class2=temp2;
+	caffe_class_.class3=temp3;
+	caffe_class_.class4=temp4;
+
+	april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+
 }
 
 void Classifier::on_tag_text_detection (
