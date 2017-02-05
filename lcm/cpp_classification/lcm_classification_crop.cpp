@@ -65,6 +65,7 @@ public:
 
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
+	void set_fit_text(std::string fit_text);
 	void run();
 	void finish();
 
@@ -110,6 +111,13 @@ private:
 	bool finish_;
 	// LCM Message Channels
 	std::string image_channel_;
+    //brian
+    int fit_number_;
+    int non_fit_number_;
+    std::string fit_text_;
+    std::ofstream prediction_fit_results_;
+    std::ofstream prediction_non_fit_results_;
+    //
 
 };
 
@@ -130,6 +138,18 @@ Classifier::Classifier(const string& model_file,
 	}else{
 		Caffe::set_mode(Caffe::GPU);
 	}
+
+	/* Set cropped image number */
+	this->fit_number_ = 0;
+	this->non_fit_number_ = 0;
+
+	std::stringstream prediction_fit_file;
+	prediction_fit_file << "fit_images/prediction_fit_results.txt";
+	this->prediction_fit_results_.open(prediction_fit_file.str().c_str());
+
+	std::stringstream prediction_non_fit_file;
+	prediction_non_fit_file << "non_fit_images/prediction_non_fit_results.txt";
+	this->prediction_non_fit_results_.open(prediction_non_fit_file.str().c_str());
 
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));
@@ -184,6 +204,10 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
 
 }
 
+void Classifier::set_fit_text(std::string fit_text){
+	this->fit_text_ = fit_text;
+}
+
 void Classifier::set_cpu(int is_cpu){
 	this->is_cpu_ = 1;
 }
@@ -192,6 +216,8 @@ void Classifier::run() {
 }
 
 void Classifier::finish() {
+	this->prediction_fit_results_.close();
+	this->prediction_non_fit_results_.close();
 	this->finish_ = true;
 }
 
@@ -485,14 +511,39 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 
 	std::vector<Prediction> predictions = this->Classify(img, 5);
 
-	/* Print the top N predictions. */
-	for (size_t i = 0; i < predictions.size(); ++i) {
-		Prediction p = predictions[i];
-		//std::cout << std::fixed << std::setprecision(10) << p.second << " - \""
-		//		<< p.first << "\"" << std::endl;
-		std::cout << p.second << " - " << p.first << std::endl;
-		/* write prediction output */
+	/* save cropped image */
+	std::string text_prediction_modified;
+	text_prediction_modified = predictions[0].first;
+	text_prediction_modified.erase(text_prediction_modified.length()-1);
+
+	std::stringstream image_name;
+	if(std::strcmp(text_prediction_modified.c_str(), this->fit_text_.c_str()) == 0){
+		image_name << "fit_images/image" << this->fit_number_ << ".jpg";
+		this->prediction_fit_results_ << image_name.str() << std::endl;
+		std::cout << "fit :" << std::endl;
+		for (size_t i = 0; i < predictions.size(); ++i) {
+			Prediction p = predictions[i];
+			//std::cout << std::fixed << std::setprecision(10) << p.second << " - \""
+			//		<< p.first << "\"" << std::endl;
+			std::cout << p.second << " - " << p.first << std::endl;
+			this->prediction_fit_results_ << p.second << "," << p.first << std::endl;
+		}
+		this->fit_number_ = this->fit_number_ + 1;
+	}else{
+		image_name << "non_fit_images/image" << this->non_fit_number_ << ".jpg";	
+		this->prediction_non_fit_results_ << image_name.str() << std::endl;
+		std::cout << "non_fit :" << std::endl;
+		for (size_t i = 0; i < predictions.size(); ++i) {
+			Prediction p = predictions[i];
+			//std::cout << std::fixed << std::setprecision(10) << p.second << " - \""
+			//		<< p.first << "\"" << std::endl;
+			std::cout << p.second << " - " << p.first << std::endl;
+			this->prediction_non_fit_results_ << p.second << "," << p.first << std::endl;
+		}
+		this->non_fit_number_ = this->non_fit_number_ + 1;
 	}
+	cv::imwrite(image_name.str(), img);
+
 
 	char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
 	strcpy(temp0, predictions[0].first.c_str());
@@ -610,6 +661,10 @@ int main(int argc, char** argv) {
 	string label_file   = argv[4];
 	string gpu_cpu = argv[7];
 	Classifier classifier(model_file, trained_file, mean_file, label_file, gpu_cpu);
+
+	if(std::strcmp(argv[8], "fit") == 0){
+		classifier.set_fit_text(argv[9]);
+	}
 
 	if(std::strcmp(argv[7], "CPU") == 0){
 		classifier.set_cpu(1);
