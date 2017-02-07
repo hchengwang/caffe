@@ -65,6 +65,7 @@ public:
 
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
+	void set_threshold(double pred_threshold_, double diff_threshold_);
 	void run();
 	void finish();
 
@@ -108,6 +109,10 @@ private:
 	cvBridgeLCM * cv_bridge_lcm_;
 	//bot_lcmgl_t* lcmgl_;
 	bool finish_;
+	// threshold 
+	double pred_threshold_;
+	double diff_threshold_;
+
 	// LCM Message Channels
 	std::string image_channel_;
 
@@ -130,6 +135,10 @@ Classifier::Classifier(const string& model_file,
 	}else{
 		Caffe::set_mode(Caffe::GPU);
 	}
+
+	/* Set threshold */
+	//this->pred_threshold_ = 0.9;
+	//this->diff_threshold_ = 3;
 
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));
@@ -186,6 +195,10 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
 
 void Classifier::set_cpu(int is_cpu){
 	this->is_cpu_ = 1;
+}
+void Classifier::set_threshold(double pred_threshold, double diff_threshold){
+	this->pred_threshold_ = pred_threshold;
+	this->diff_threshold_ = diff_threshold;
 }
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
@@ -460,7 +473,6 @@ for(int i=0; i<4; i++){
 }
 
 void Classifier::on_libbot(const bot_core_image_t* image_msg) {
-	std::cout << "img" << std::endl;
 
 	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
 	cv::Mat im_vis = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
@@ -484,6 +496,17 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 	CHECK(!img.empty()) << "Unable to decode image ";
 
 	std::vector<Prediction> predictions = this->Classify(img, 5);
+
+	/* prediction evaluation */
+	std::cout << "logfiff : " << std::log10(predictions[0].second/predictions[1].second) << std::endl;
+	if(predictions[0].second <= this->pred_threshold_){
+		std::cout << "under prediction threshold" << std::endl;
+		return;
+	}
+	if(std::log10(predictions[0].second/predictions[1].second) <= this->diff_threshold_){
+		std::cout << "non enough difference" << std::endl;
+		return;
+	}
 
 	/* Print the top N predictions. */
 	for (size_t i = 0; i < predictions.size(); ++i) {
@@ -610,6 +633,16 @@ int main(int argc, char** argv) {
 	string label_file   = argv[4];
 	string gpu_cpu = argv[7];
 	Classifier classifier(model_file, trained_file, mean_file, label_file, gpu_cpu);
+
+	double pred_threshold;
+	double diff_threshold;
+
+	/* set threshold */
+	if(std::strcmp(argv[8], "threshold") == 0){
+		pred_threshold = atof(argv[9]);
+		diff_threshold = atof(argv[10]);
+		classifier.set_threshold(pred_threshold, diff_threshold);
+	}
 
 	if(std::strcmp(argv[7], "CPU") == 0){
 		classifier.set_cpu(1);
