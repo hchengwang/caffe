@@ -61,7 +61,8 @@ public:
 			const string& label_file,
 			const string& gpu_cpu);
 
-	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
+	//std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
+	std::vector<Prediction> Classify(const std::vector<cv::Mat>& img, int N = 5);
 
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
@@ -87,12 +88,12 @@ public:
 private:
 	void SetMean(const string& mean_file);
 
-	std::vector<float> Predict(const cv::Mat& img);
+	std::vector<float> Predict(const std::vector<cv::Mat>& img);
 
 	void WrapInputLayer(std::vector<cv::Mat>* input_channels);
 
 	void Preprocess(const cv::Mat& img,
-			std::vector<cv::Mat>* input_channels);
+			std::vector<cv::Mat>* input_channels, int input_number);
 
 private:
 	shared_ptr<Net<float> > net_;
@@ -115,6 +116,9 @@ private:
 
 	// LCM Message Channels
 	std::string image_channel_;
+
+	// batch image
+	std::vector<cv::Mat> input_images_;
 
 };
 
@@ -227,7 +231,7 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> Classifier::Classify(const cv::Mat& img, int N) {
+std::vector<Prediction> Classifier::Classify(const std::vector<cv::Mat>& img, int N) {
 	std::vector<float> output = Predict(img);
 
 	N = std::min<int>(labels_.size(), N);
@@ -272,7 +276,7 @@ void Classifier::SetMean(const string& mean_file) {
 	mean_ = cv::Mat(input_geometry_, mean.type(), channel_mean);
 }
 
-std::vector<float> Classifier::Predict(const cv::Mat& img) {
+std::vector<float> Classifier::Predict(const std::vector<cv::Mat>& img) {
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	input_layer->Reshape(1, num_channels_,
 			input_geometry_.height, input_geometry_.width);
@@ -280,10 +284,15 @@ std::vector<float> Classifier::Predict(const cv::Mat& img) {
 	net_->Reshape();
 
 	std::vector<cv::Mat> input_channels;
-
+	std::cout << "input sizess : " << input_channels.size() << std::endl;
 	WrapInputLayer(&input_channels);
-
-	Preprocess(img, &input_channels);
+	for(int i = 0; i < img.size(); i++){
+		std::cout << img.size() << std::endl;
+		std::cout << i << std::endl;
+		std::cout << "fdsf" << std::endl;
+		Preprocess(img[i], &input_channels, i);
+		std::cout << "fdssssf" << std::endl;
+	}
 	std::cout << "input size : " << input_channels.size() << std::endl;
 	net_->Forward();
 
@@ -306,6 +315,7 @@ void Classifier::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	int height = input_layer->height();
 	float* input_data = input_layer->mutable_cpu_data();
 	for (int i = 0; i < input_layer->channels(); ++i) {
+		std::cout << "input channel" << input_layer->channels() << std::endl;
 		cv::Mat channel(height, width, CV_32FC1, input_data);
 		input_channels->push_back(channel);
 		input_data += width * height;
@@ -313,7 +323,7 @@ void Classifier::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 }
 
 void Classifier::Preprocess(const cv::Mat& img,
-		std::vector<cv::Mat>* input_channels) {
+		std::vector<cv::Mat>* input_channels, int input_index) {
 	/* Convert the input image to the input image format of the network. */
 	cv::Mat sample;
 	if (img.channels() == 3 && num_channels_ == 1)
@@ -348,8 +358,8 @@ void Classifier::Preprocess(const cv::Mat& img,
 	//**important modified for no mean file(change sample_normalized to sample_float)	
 	cv::split(sample_float, *input_channels);
 
-	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
-			== net_->input_blobs()[0]->cpu_data())
+	CHECK(reinterpret_cast<float*>(input_channels->at(input_index).data)
+			== net_->input_blobs()[input_index]->cpu_data())
 	<< "Input channels are not wrapping the input layer of the network.";
 }
 
@@ -496,7 +506,18 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 	img = im_rect;
 	CHECK(!img.empty()) << "Unable to decode image ";
 
-	std::vector<Prediction> predictions = this->Classify(img, 5);
+	std::vector<Prediction> predictions;
+
+	this->input_images_.push_back(img);
+	std::cout << " input images number : " << this->input_images_.size() << std::endl;
+	if(this->input_images_.size() == 5){
+		//std::vector<Prediction> predictions = this->Classify(img, 5);
+		predictions = this->Classify(this->input_images_, 5);
+		this->input_images_.clear();
+	}else{
+		std::cout << "non enough input images " << std::endl;
+		return;
+	}
 
 	/* prediction evaluation */
 	std::cout << "logfiff : " << std::log10(predictions[0].second/predictions[1].second) << std::endl;
