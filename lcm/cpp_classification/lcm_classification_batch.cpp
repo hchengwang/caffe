@@ -29,6 +29,8 @@
 #include <GL/gl.h>
 #include <lcmtypes/april_tags_tag_text_detection_t.h>
 #include <lcmtypes/april_tags_tag_text_detections_t.h>
+#include <lcmtypes/april_tags_quad_proposal_t.h>
+#include <lcmtypes/april_tags_quad_proposals_t.h>
 #include "lcmtypes/april_tags_caffe_class_t.h"
 #include <jpeg-utils/jpeg-utils.h>
 #include <jpeg-utils/jpeg-utils-ijg.h>
@@ -61,9 +63,8 @@ public:
 			const string& label_file,
 			const string& gpu_cpu);
 
-	//std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
-	std::vector<Prediction> Classify(const std::vector<cv::Mat>& img, int N = 5);
-
+	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
+    std::vector< vector<Prediction> > ClassifyBatch(const vector< cv::Mat > imgs, int N = 5);
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
 	void set_threshold(double pred_threshold_, double diff_threshold_);
@@ -85,15 +86,25 @@ public:
 			const april_tags_tag_text_detections_t* msg,
 			void* user_data);
 
+	void on_quad_proposals(const april_tags_quad_proposals_t* msg);
+	static void on_quad_proposals_aux(const lcm_recv_buf_t* rbuf,
+			const char* channel,
+			const april_tags_quad_proposals_t* msg,
+			void* user_data);
+
 private:
 	void SetMean(const string& mean_file);
 
-	std::vector<float> Predict(const std::vector<cv::Mat>& img);
-
+	std::vector<float> Predict(const cv::Mat& img);
+	std::vector<float> PredictBatch(const vector< cv::Mat > imgs);
+	
 	void WrapInputLayer(std::vector<cv::Mat>* input_channels);
-
+	void WrapBatchInputLayer(std::vector<std::vector<cv::Mat> > *input_batch);
+	
 	void Preprocess(const cv::Mat& img,
-			std::vector<cv::Mat>* input_channels, int input_number);
+			std::vector<cv::Mat>* input_channels);
+	void PreprocessBatch(const vector<cv::Mat> imgs,
+            std::vector< std::vector<cv::Mat> >* input_batch);
 
 private:
 	shared_ptr<Net<float> > net_;
@@ -113,12 +124,15 @@ private:
 	// threshold 
 	double pred_threshold_;
 	double diff_threshold_;
-
+	// batch size
+	int batch_size_;
+	// image;
+	cv::Mat img_;
+	// get image;
+	int image_number_;
+	bool get_image_;
 	// LCM Message Channels
 	std::string image_channel_;
-
-	// batch image
-	std::vector<cv::Mat> input_images_;
 
 };
 
@@ -144,6 +158,10 @@ Classifier::Classifier(const string& model_file,
 	//this->pred_threshold_ = 0.9;
 	//this->diff_threshold_ = 3;
 
+	/* Set batchsize */
+	batch_size_ = 5;
+	this->image_number_ = 0;
+	this->get_image_ = false;
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));
 	net_->CopyTrainedLayersFrom(trained_file);
@@ -191,6 +209,10 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
 	april_tags_tag_text_detections_t_subscribe(
 			lcm, atags_channel, Classifier::on_tag_text_detections_aux, this);
 
+	const char* quads_channel = "QUAD_PROPOSALS";
+	april_tags_quad_proposals_t_subscribe(
+			lcm, quads_channel, Classifier::on_quad_proposals_aux, this);
+
 	cv_bridge_lcm_ = new cvBridgeLCM(lcm, lcm);
 	//caffe_class_ = new april_tags_caffe_class_t;
 	finish_ = false;
@@ -231,7 +253,7 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> Classifier::Classify(const std::vector<cv::Mat>& img, int N) {
+std::vector<Prediction> Classifier::Classify(const cv::Mat& img, int N) {
 	std::vector<float> output = Predict(img);
 
 	N = std::min<int>(labels_.size(), N);
@@ -243,6 +265,22 @@ std::vector<Prediction> Classifier::Classify(const std::vector<cv::Mat>& img, in
 	}
 
 	return predictions;
+}
+
+std::vector< vector<Prediction> > Classifier::ClassifyBatch(const vector< cv::Mat > imgs, int num_classes){
+    std::vector<float> output_batch = PredictBatch(imgs);
+    std::vector< std::vector<Prediction> > predictions;
+    for(int j = 0; j < imgs.size(); j++){
+        std::vector<float> output(output_batch.begin() + j*num_classes, output_batch.begin() + (j+1)*num_classes);
+        std::vector<int> maxN = Argmax(output, num_classes);
+        std::vector<Prediction> prediction_single;
+        for (int i = 0; i < num_classes; ++i) {
+          int idx = maxN[i];
+          prediction_single.push_back(std::make_pair(labels_[idx], output[idx]));
+        }
+        predictions.push_back(std::vector<Prediction>(prediction_single));
+    }
+    return predictions;
 }
 
 /* Load the mean file in binaryproto format. */
@@ -276,7 +314,7 @@ void Classifier::SetMean(const string& mean_file) {
 	mean_ = cv::Mat(input_geometry_, mean.type(), channel_mean);
 }
 
-std::vector<float> Classifier::Predict(const std::vector<cv::Mat>& img) {
+std::vector<float> Classifier::Predict(const cv::Mat& img) {
 	Blob<float>* input_layer = net_->input_blobs()[0];
 	input_layer->Reshape(1, num_channels_,
 			input_geometry_.height, input_geometry_.width);
@@ -284,15 +322,10 @@ std::vector<float> Classifier::Predict(const std::vector<cv::Mat>& img) {
 	net_->Reshape();
 
 	std::vector<cv::Mat> input_channels;
-	std::cout << "input sizess : " << input_channels.size() << std::endl;
+
 	WrapInputLayer(&input_channels);
-	for(int i = 0; i < img.size(); i++){
-		std::cout << img.size() << std::endl;
-		std::cout << i << std::endl;
-		std::cout << "fdsf" << std::endl;
-		Preprocess(img[i], &input_channels, i);
-		std::cout << "fdssssf" << std::endl;
-	}
+
+	Preprocess(img, &input_channels);
 	std::cout << "input size : " << input_channels.size() << std::endl;
 	net_->Forward();
 
@@ -301,6 +334,28 @@ std::vector<float> Classifier::Predict(const std::vector<cv::Mat>& img) {
 	const float* begin = output_layer->cpu_data();
 	const float* end = begin + output_layer->channels();
 	return std::vector<float>(begin, end);
+}
+
+std::vector< float >  Classifier::PredictBatch(const vector< cv::Mat > imgs) {
+  Blob<float>* input_layer = net_->input_blobs()[0];
+
+  input_layer->Reshape(batch_size_, num_channels_,
+                       input_geometry_.height,
+                       input_geometry_.width);
+
+  /* Forward dimension change to all layers. */
+  net_->Reshape();
+
+  std::vector< std::vector<cv::Mat> > input_batch;
+  WrapBatchInputLayer(&input_batch);
+  PreprocessBatch(imgs, &input_batch);
+  net_->ForwardPrefilled();
+
+  /* Copy the output layer to a std::vector */
+  Blob<float>* output_layer = net_->output_blobs()[0];
+  const float* begin = output_layer->cpu_data();
+  const float* end = begin + output_layer->channels()*imgs.size();
+  return std::vector<float>(begin, end);
 }
 
 /* Wrap the input layer of the network in separate cv::Mat objects
@@ -315,15 +370,35 @@ void Classifier::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
 	int height = input_layer->height();
 	float* input_data = input_layer->mutable_cpu_data();
 	for (int i = 0; i < input_layer->channels(); ++i) {
-		std::cout << "input channel" << input_layer->channels() << std::endl;
 		cv::Mat channel(height, width, CV_32FC1, input_data);
 		input_channels->push_back(channel);
 		input_data += width * height;
 	}
 }
 
+void Classifier::WrapBatchInputLayer(std::vector<std::vector<cv::Mat> > *input_batch){
+    Blob<float>* input_layer = net_->input_blobs()[0];
+
+    int width = input_layer->width();
+    int height = input_layer->height();
+    int num = input_layer->num();
+    float* input_data = input_layer->mutable_cpu_data();
+    for ( int j = 0; j < num; j++){
+        vector<cv::Mat> input_channels;
+        for (int i = 0; i < input_layer->channels(); ++i){
+          cv::Mat channel(height, width, CV_32FC1, input_data);
+          input_channels.push_back(channel);
+          input_data += width * height;
+        }
+        input_batch -> push_back(vector<cv::Mat>(input_channels));
+    }
+    cv::imshow("bla", input_batch->at(1).at(0));
+    cv::waitKey(1);
+}
+
+
 void Classifier::Preprocess(const cv::Mat& img,
-		std::vector<cv::Mat>* input_channels, int input_index) {
+		std::vector<cv::Mat>* input_channels) {
 	/* Convert the input image to the input image format of the network. */
 	cv::Mat sample;
 	if (img.channels() == 3 && num_channels_ == 1)
@@ -358,9 +433,53 @@ void Classifier::Preprocess(const cv::Mat& img,
 	//**important modified for no mean file(change sample_normalized to sample_float)	
 	cv::split(sample_float, *input_channels);
 
-	CHECK(reinterpret_cast<float*>(input_channels->at(input_index).data)
-			== net_->input_blobs()[input_index]->cpu_data())
+	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
+			== net_->input_blobs()[0]->cpu_data())
 	<< "Input channels are not wrapping the input layer of the network.";
+}
+
+void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
+                                      std::vector< std::vector<cv::Mat> >* input_batch){
+    for (int i = 0 ; i < imgs.size(); i++){
+        cv::Mat img = imgs[i];
+        std::vector<cv::Mat> *input_channels = &(input_batch->at(i));
+        /* Convert the input image to the input image format of the network. */
+        cv::Mat sample;
+        if (img.channels() == 3 && num_channels_ == 1)
+          cv::cvtColor(img, sample, CV_BGR2GRAY);
+        else if (img.channels() == 4 && num_channels_ == 1)
+          cv::cvtColor(img, sample, CV_BGRA2GRAY);
+        else if (img.channels() == 4 && num_channels_ == 3)
+          cv::cvtColor(img, sample, CV_BGRA2BGR);
+        else if (img.channels() == 1 && num_channels_ == 3)
+          cv::cvtColor(img, sample, CV_GRAY2BGR);
+        else
+          sample = img;
+
+        cv::Mat sample_resized;
+        if (sample.size() != input_geometry_)
+          cv::resize(sample, sample_resized, input_geometry_);
+        else
+          sample_resized = sample;
+
+        cv::Mat sample_float;
+        if (num_channels_ == 3)
+          sample_resized.convertTo(sample_float, CV_32FC3);
+        else
+          sample_resized.convertTo(sample_float, CV_32FC1);
+
+        //cv::Mat sample_normalized;
+        //cv::subtract(sample_float, mean_, sample_normalized);
+
+        /* This operation will write the separate BGR planes directly to the
+         * input layer of the network because it is wrapped by the cv::Mat
+         * objects in input_channels. */
+        //cv::split(sample_normalized, *input_channels);
+        cv::split(sample_float, *input_channels);
+        //CHECK(reinterpret_cast<float*>(input_channels->at(i).data)
+        //      == net_->input_blobs()[0]->cpu_data())
+        //  << "Input channels are not wrapping the input layer of the network.";
+    }
 }
 
 void Classifier::on_libbot_daniel(const bot_core_image_t* image_msg) {
@@ -505,57 +624,51 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 	//cv::Mat img = cv::imread(file, -1);
 	img = im_rect;
 	CHECK(!img.empty()) << "Unable to decode image ";
-
-	std::vector<Prediction> predictions;
-
-	this->input_images_.push_back(img);
-	std::cout << " input images number : " << this->input_images_.size() << std::endl;
-	if(this->input_images_.size() == 5){
-		//std::vector<Prediction> predictions = this->Classify(img, 5);
-		predictions = this->Classify(this->input_images_, 5);
-		this->input_images_.clear();
-	}else{
-		std::cout << "non enough input images " << std::endl;
-		return;
-	}
+	this->img_ = img;
+	this->get_image_ = true;
+    
+    
+	///std::vector<Prediction> predictions = this->Classify(img, 5);
 
 	/* prediction evaluation */
-	std::cout << "logfiff : " << std::log10(predictions[0].second/predictions[1].second) << std::endl;
-	if(predictions[0].second <= this->pred_threshold_){
-		std::cout << "under prediction threshold" << std::endl;
-		return;
-	}
-	if(std::log10(predictions[0].second/predictions[1].second) <= this->diff_threshold_){
-		std::cout << "non enough difference" << std::endl;
-		return;
-	}
+	//std::cout << "logfiff : " << std::log10(predictions[0].second/predictions[1].second) << std::endl;
+	//if(predictions[0].second <= this->pred_threshold_){
+//		std::cout << "under prediction threshold" << std::endl;
+//		return;
+//	}
+//	if(std::log10(predictions[0].second/predictions[1].second) <= this->diff_threshold_){
+//		std::cout << "non enough difference" << std::endl;
+//		return;
+//	}
 
 	/* Print the top N predictions. */
-	for (size_t i = 0; i < predictions.size(); ++i) {
-		Prediction p = predictions[i];
+//	for (size_t i = 0; i < predictions.size(); ++i) {
+//		Prediction p = predictions[i];
 		//std::cout << std::fixed << std::setprecision(10) << p.second << " - \""
 		//		<< p.first << "\"" << std::endl;
-		std::cout << p.second << " - " << p.first << std::endl;
+//		std::cout << p.second << " - " << p.first << std::endl;
 		/* write prediction output */
-	}
+//	}
 
-	char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
-	strcpy(temp0, predictions[0].first.c_str());
-	strcpy(temp1, predictions[1].first.c_str());
-	strcpy(temp2, predictions[2].first.c_str());
-	strcpy(temp3, predictions[3].first.c_str());
-	strcpy(temp4, predictions[4].first.c_str());
- 
+	//char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
+	//strcpy(temp0, predictions[0].first.c_str());
+	//strcpy(temp1, predictions[1].first.c_str());
+	//strcpy(temp2, predictions[2].first.c_str());
+	//strcpy(temp3, predictions[3].first.c_str());
+	//strcpy(temp4, predictions[4].first.c_str());
 
-	caffe_class_.class0=temp0;
-	caffe_class_.class1=temp1;
-	caffe_class_.class2=temp2;
-	caffe_class_.class3=temp3;
-	caffe_class_.class4=temp4;
+	//caffe_class_.class0=temp0;
+	//caffe_class_.class1=temp1;
+	//caffe_class_.class2=temp2;
+	//caffe_class_.class3=temp3;
+	//caffe_class_.class4=temp4;
 
-	april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+	//april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+    
+    
 
 }
+
 
 void Classifier::on_tag_text_detection (
 		const april_tags_tag_text_detection_t detection) {
@@ -564,9 +677,107 @@ void Classifier::on_tag_text_detection (
 void Classifier::on_tag_text_detections (
 		const april_tags_tag_text_detections_t* detections) {
 	std::cout << "bbox" << std::endl;
-
-
 }
+
+void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_msg) {
+	std::cout << "get quad" << std::endl;
+	if(!this->get_image_){
+		std::cout << "non get image" << std::endl;
+		return;
+	}
+    cv::Rect crop_rect;
+    std::vector<cv::Mat> imgs;
+    std::vector< std::vector<Prediction> > predictions;
+
+    for(int i = 0; i < proposals_msg->n; i++){
+    	this->image_number_ = this->image_number_ +1;
+    	stringstream image_name;
+    	image_name << "imagesss/image_" << this->image_number_ << ".jpg"; 
+		crop_rect.x = proposals_msg->proposals[i].x;
+		crop_rect.y = proposals_msg->proposals[i].y;
+    	crop_rect.width = proposals_msg->proposals[i].width;
+       	crop_rect.height = proposals_msg->proposals[i].height;
+       	std::cout << crop_rect.x << "," << crop_rect.y << "," << crop_rect.width << "," << crop_rect.height << std::endl;
+	 	if(imgs.size() < batch_size_){
+      		imgs.push_back(this->img_(crop_rect)); 
+      		cv::imwrite(image_name.str(), this->img_(crop_rect)); 		
+    	}
+    	if( i == (proposals_msg->n - 1)){
+    		std::cout << "rest images" << std::endl;
+    		//for(int k = 0; k < batch_size_ - imgs.size(); k++){
+      		//	imgs.push_back(this->img_(crop_rect));
+    		//}
+    		predictions = this->ClassifyBatch(imgs, 28);
+				/* Print the top N predictions. */
+			for (int j = 0; j < predictions.size(); j++) {
+				std::cout << "image : " << this->image_number_ - j << std::endl;
+				/* prediction evaluation */
+				std::cout << "logfiff : " << std::log10(predictions[j][0].second/predictions[j][1].second) << std::endl;
+				if(predictions[j][0].second <= this->pred_threshold_){
+					std::cout << "under prediction threshold" << std::endl;
+					continue;
+				}
+				if(std::log10(predictions[j][0].second/predictions[j][1].second) <= this->diff_threshold_){
+					std::cout << "non enough difference" << std::endl;
+					continue;
+				}
+
+				for (int k = 0; k < predictions[j].size(); k++) {
+					Prediction p = predictions[j][k];
+					std::cout << p.second << " - " << p.first << std::endl;
+				}
+			}
+			imgs.clear();
+    	}
+    	if(imgs.size() == batch_size_){
+			predictions = this->ClassifyBatch(imgs, 28);
+				/* Print the top N predictions. */
+			for (int j = 0; j < predictions.size(); j++) {
+				std::cout << "image : " << this->image_number_ - j << std::endl;
+				/* prediction evaluation */
+				std::cout << "logfiff : " << std::log10(predictions[j][0].second/predictions[j][1].second) << std::endl;
+				if(predictions[j][0].second <= this->pred_threshold_){
+					std::cout << "under prediction threshold" << std::endl;
+					continue;
+				}
+				if(std::log10(predictions[j][0].second/predictions[j][1].second) <= this->diff_threshold_){
+					std::cout << "non enough difference" << std::endl;
+					continue;
+				}
+
+				for (int k = 0; k < predictions[j].size(); k++) {
+					Prediction p = predictions[j][k];
+					std::cout << p.second << " - " << p.first << std::endl;
+				}
+				char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
+				strcpy(temp0, predictions[j][0].first.c_str());
+				strcpy(temp1, predictions[j][1].first.c_str());
+				strcpy(temp2, predictions[j][2].first.c_str());
+				strcpy(temp3, predictions[j][3].first.c_str());
+				strcpy(temp4, predictions[j][4].first.c_str());
+
+				caffe_class_.class0=temp0;
+				caffe_class_.class1=temp1;
+				caffe_class_.class2=temp2;
+				caffe_class_.class3=temp3;
+				caffe_class_.class4=temp4;
+
+				april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+			}
+			imgs.clear();
+    	}
+    }
+
+	//std::vector<cv::Mat> imgs;
+	//std::vector< std::vector<Prediction> > predictionss;
+	//imgs.push_back(img);
+	//imgs.push_back(img);
+	//imgs.push_back(img);
+	//imgs.push_back(img);
+	//imgs.push_back(img);
+	//predictionss = this->ClassifyBatch(imgs, 5);
+}
+
 
 void Classifier::on_libbot_aux(const lcm_recv_buf_t* rbuf,
 		const char* channel,
@@ -580,6 +791,13 @@ void Classifier::on_tag_text_detections_aux( const lcm_recv_buf_t* rbuf,
 		const april_tags_tag_text_detections_t* detections,
 		void* user_data) {
 	(static_cast<Classifier *>(user_data))->on_tag_text_detections(detections);
+}
+
+void Classifier::on_quad_proposals_aux( const lcm_recv_buf_t* rbuf,
+		const char* channel,
+		const april_tags_quad_proposals_t* proposals,
+		void* user_data) {
+	(static_cast<Classifier *>(user_data))->on_quad_proposals(proposals);
 }
 
 void read_frames(string image_folder,

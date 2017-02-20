@@ -1,0 +1,7 @@
+package april_tags;
+struct quad_proposals_t {
+  int64_t utime;
+  int32_t n;
+  quad_proposal_t proposals[n];
+}
+
