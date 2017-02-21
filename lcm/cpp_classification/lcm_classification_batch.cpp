@@ -68,6 +68,7 @@ public:
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
 	void set_threshold(double pred_threshold_, double diff_threshold_);
+	void draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,cv::Scalar color, int shift_x);
 	void run();
 	void finish();
 
@@ -128,6 +129,7 @@ private:
 	int batch_size_;
 	// image;
 	cv::Mat img_;
+	cv::Mat img_rgb_;
 	// get image;
 	int image_number_;
 	bool get_image_;
@@ -624,6 +626,7 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 	//cv::Mat img = cv::imread(file, -1);
 	img = im_rect;
 	CHECK(!img.empty()) << "Unable to decode image ";
+	this->img_rgb_ = im_rgb;
 	this->img_ = img;
 	this->get_image_ = true;
     
@@ -688,7 +691,8 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
     cv::Rect crop_rect;
     std::vector<cv::Mat> imgs;
     std::vector< std::vector<Prediction> > predictions;
-
+    int loop = 0;
+    int pred_index = 0;
     for(int i = 0; i < proposals_msg->n; i++){
     	this->image_number_ = this->image_number_ +1;
     	stringstream image_name;
@@ -745,7 +749,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					continue;
 				}
 
-				for (int k = 0; k < predictions[j].size(); k++) {
+				for (int k = 0; k < 5; k++) {
 					Prediction p = predictions[j][k];
 					std::cout << p.second << " - " << p.first << std::endl;
 				}
@@ -763,8 +767,29 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 				caffe_class_.class4=temp4;
 
 				april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+
+				cv::Mat img_crop;
+				april_tags_quad_proposal_t pred_proposal;
+				img_crop = this->img_rgb_.clone();
+				stringstream ss_out;
+    			ss_out << "CAFFE_PREDICTION_RECT";
+    			pred_index = loop * 5 + j; 
+    			//cv::Rect crop_rect_p;
+    			//crop_rect_p.x = proposals_msg->proposals[pred_index].x;
+				//crop_rect_p.y = proposals_msg->proposals[pred_index].y;
+    			//crop_rect_p.width = proposals_msg->proposals[pred_index].width;
+       			//crop_rect_p.height = proposals_msg->proposals[pred_index].height;
+				pred_proposal.x = proposals_msg->proposals[pred_index].x;
+				pred_proposal.y = proposals_msg->proposals[pred_index].y;
+				pred_proposal.width = proposals_msg->proposals[pred_index].width;
+				pred_proposal.height = proposals_msg->proposals[pred_index].height;
+
+    			//this->draw_annotation(img_crop, crop_rect_p, caffe_class_.class0, cv::Scalar(0, 255, 0),0);
+    			//cv_bridge_lcm_->publish_mjpg(img_crop, (char*)ss_out.str().c_str()); 
+    			april_tags_quad_proposal_t_publish(lcm_, ss_out.str().c_str(), &pred_proposal);
 			}
 			imgs.clear();
+			loop = loop + 1;
     	}
     }
 
@@ -777,6 +802,37 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 	//imgs.push_back(img);
 	//predictionss = this->ClassifyBatch(imgs, 5);
 }
+
+void Classifier::draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,
+        cv::Scalar color, int shift_x){
+
+    rectangle( im, bbox.tl(), bbox.br(), color, 2, 8, 0 );
+
+    // put text
+    string text = anno;
+    int fontFace = cv::FONT_HERSHEY_PLAIN;
+    double fontScale = 1;
+    int thickness = 1;
+
+    int baseline=0;
+    cv::Size textSize = cv::getTextSize(text, fontFace,
+            fontScale, thickness, &baseline);
+    baseline += thickness;
+
+    // center the text
+    cv::Point textOrg(bbox.x + shift_x, bbox.y - 8);
+
+    // draw the box
+    cv::rectangle(im, textOrg + cv::Point(0, baseline),
+            textOrg + cv::Point(textSize.width, -textSize.height),
+            color, CV_FILLED);
+
+    // then put the text itself
+    cv::putText(im, text, textOrg, fontFace, fontScale,
+            cv::Scalar::all(0), thickness, 8);
+}
+
+
 
 
 void Classifier::on_libbot_aux(const lcm_recv_buf_t* rbuf,
