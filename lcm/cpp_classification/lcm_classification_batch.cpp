@@ -704,7 +704,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
        	std::cout << crop_rect.x << "," << crop_rect.y << "," << crop_rect.width << "," << crop_rect.height << std::endl;
 	 	if(imgs.size() < batch_size_){
       		imgs.push_back(this->img_(crop_rect)); 
-      		cv::imwrite(image_name.str(), this->img_(crop_rect)); 		
+      		//cv::imwrite(image_name.str(), this->img_(crop_rect)); 		
     	}
     	if( i == (proposals_msg->n - 1)){
     		std::cout << "rest images" << std::endl;
@@ -726,10 +726,31 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					continue;
 				}
 
-				for (int k = 0; k < predictions[j].size(); k++) {
+				for (int k = 0; k < 5; k++) {
 					Prediction p = predictions[j][k];
 					std::cout << p.second << " - " << p.first << std::endl;
 				}
+				char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
+				strcpy(temp0, predictions[j][0].first.c_str());
+				strcpy(temp1, predictions[j][1].first.c_str());
+				strcpy(temp2, predictions[j][2].first.c_str());
+				strcpy(temp3, predictions[j][3].first.c_str());
+				strcpy(temp4, predictions[j][4].first.c_str());
+				caffe_class_.class0=temp0;
+				caffe_class_.class1=temp1;
+				caffe_class_.class2=temp2;
+				caffe_class_.class3=temp3;
+				caffe_class_.class4=temp4;
+				april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+				april_tags_quad_proposal_t pred_proposal;
+				stringstream ss_out;
+    			ss_out << "CAFFE_PREDICTION_RECT";
+    			pred_index = loop * 5 + j; 
+				pred_proposal.x = proposals_msg->proposals[pred_index].x;
+				pred_proposal.y = proposals_msg->proposals[pred_index].y;
+				pred_proposal.width = proposals_msg->proposals[pred_index].width;
+				pred_proposal.height = proposals_msg->proposals[pred_index].height;
+    			april_tags_quad_proposal_t_publish(lcm_, ss_out.str().c_str(), &pred_proposal);
 			}
 			imgs.clear();
     	}
