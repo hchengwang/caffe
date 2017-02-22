@@ -688,8 +688,8 @@ void Classifier::on_tag_text_detections (
 
 void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_msg) {
 	 // measure process time
-    std::cout << "start" << std::endl;
-    const clock_t begin_time = clock();
+	int64_t start_time;
+	start_time = bot_timestamp_now();
     //
 	std::cout << "get quad" << std::endl;
 	if(!this->get_image_){
@@ -831,8 +831,8 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 	//imgs.push_back(img);
 	//predictionss = this->ClassifyBatch(imgs, 5);
 	 // measure process time
-    std::cout << "end" << std::endl;
-    std::cout << "processtime : "<< float( clock () - begin_time ) << std::endl;
+
+	std::cout << "process image time: " << (bot_timestamp_now() - start_time) << std::endl;
     //
 }
 
