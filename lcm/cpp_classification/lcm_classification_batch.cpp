@@ -67,7 +67,8 @@ public:
     std::vector< vector<Prediction> > ClassifyBatch(const vector< cv::Mat > imgs, int N = 5);
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
-	void set_threshold(double pred_threshold_, double diff_threshold_);
+	void set_threshold(double pred_threshold, double diff_threshold);
+	void set_batch_size(int batch_size);
 	void draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,cv::Scalar color, int shift_x);
 	void run();
 	void finish();
@@ -227,6 +228,9 @@ void Classifier::set_cpu(int is_cpu){
 void Classifier::set_threshold(double pred_threshold, double diff_threshold){
 	this->pred_threshold_ = pred_threshold;
 	this->diff_threshold_ = diff_threshold;
+}
+void Classifier::set_batch_size(int batch_size){
+	batch_size_ = batch_size;
 }
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
@@ -683,6 +687,10 @@ void Classifier::on_tag_text_detections (
 }
 
 void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_msg) {
+	 // measure process time
+    std::cout << "start" << std::endl;
+    const clock_t begin_time = clock();
+    //
 	std::cout << "get quad" << std::endl;
 	if(!this->get_image_){
 		std::cout << "non get image" << std::endl;
@@ -822,6 +830,10 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 	//imgs.push_back(img);
 	//imgs.push_back(img);
 	//predictionss = this->ClassifyBatch(imgs, 5);
+	 // measure process time
+    std::cout << "end" << std::endl;
+    std::cout << "processtime : "<< float( clock () - begin_time ) << std::endl;
+    //
 }
 
 void Classifier::draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,
@@ -953,12 +965,17 @@ int main(int argc, char** argv) {
 
 	double pred_threshold;
 	double diff_threshold;
+ 	int batch_size;
 
 	/* set threshold */
 	if(std::strcmp(argv[8], "threshold") == 0){
 		pred_threshold = atof(argv[9]);
 		diff_threshold = atof(argv[10]);
 		classifier.set_threshold(pred_threshold, diff_threshold);
+	}
+	if(std::strcmp(argv[11], "batch") == 0){
+		batch_size = atoi(argv[12]);
+		classifier.set_batch_size(batch_size);
 	}
 
 	if(std::strcmp(argv[7], "CPU") == 0){
