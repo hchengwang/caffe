@@ -1,0 +1,6 @@
+package april_tags;
+struct caffe_class_array_t {
+  int32_t n;
+  int32_t hit[n];
+  caffe_class_t caffe_array[n];
+}
