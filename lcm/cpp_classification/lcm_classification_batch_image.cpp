@@ -651,7 +651,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 	int64_t start_time;
 	start_time = bot_timestamp_now();
     // return if image not received yet
-	std::cout << "get quad" << std::endl;
+	std::cout << "get quad: " << proposals_msg->n << std::endl;
 	cv::Mat im_rgb_to_pub; 
 	im_rgb_to_pub = this->img_rgb_;
 	if(!this->get_image_){
@@ -676,6 +676,8 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
     april_tags_caffe_class_t caffe_array[proposals_msg->n];
     april_tags_caffe_class_array_t caffe_class_array;
 
+    int loop = 0;
+
     for(int i = 0; i < proposals_msg->n; i++){
 		crop_rect.x = proposals_msg->proposals[i].x;
 		crop_rect.y = proposals_msg->proposals[i].y;
@@ -694,34 +696,35 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 				std::cout << "logfiff : " << std::log10(predictions[j][0].second/predictions[j][1].second) << std::endl;
 				if(predictions[j][0].second <= this->pred_threshold_){
 					std::cout << "under prediction threshold" << std::endl;
-					hit[j] = 0;				
-					caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-					caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-					caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-					caffe_array[j].class3=(char*)predictions[j][3].first.c_str();
-					caffe_array[j].class4=(char*)predictions[j][4].first.c_str();
+					hit[j+loop*10] = 0;				
+					caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
+					caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
+					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
+					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
+					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 					continue;
 				}
 				if(std::log10(predictions[j][0].second/predictions[j][1].second) <= this->diff_threshold_){
 					std::cout << "non enough difference" << std::endl;
-					hit[j] = 0;			
-					caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-					caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-					caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-					caffe_array[j].class3=(char*)predictions[j][3].first.c_str();
-					caffe_array[j].class4=(char*)predictions[j][4].first.c_str();
+					hit[j+loop*10] = 0;				
+					caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
+					caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
+					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
+					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
+					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 					continue;
 				}
 				for (int k = 0; k < 5; k++) {
 					Prediction p = predictions[j][k];
 					std::cout << p.second << " - " << p.first << std::endl;
 				}
-				hit[j] = 1;
-				caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-				caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-				caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-				caffe_array[j].class3=(char*)predictions[j][3].first.c_str();
-				caffe_array[j].class4=(char*)predictions[j][4].first.c_str();
+					hit[j+loop*10] = 0;				
+					caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
+					caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
+					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
+					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
+					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
+				
 			}
 			imgs.clear();
     	}
@@ -734,22 +737,22 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 				std::cout << "logfiff : " << std::log10(predictions[j][0].second/predictions[j][1].second) << std::endl;
 				if(predictions[j][0].second <= this->pred_threshold_){
 					std::cout << "under prediction threshold" << std::endl;
-					hit[j] = 0;				
-					caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-					caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-					caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-					caffe_array[j].class3=(char*)predictions[j][3].first.c_str();
-					caffe_array[j].class4=(char*)predictions[j][4].first.c_str();
+					hit[j+loop*10] = 0;				
+					caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
+					caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
+					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
+					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
+					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 					continue;
 				}
 				if(std::log10(predictions[j][0].second/predictions[j][1].second) <= this->diff_threshold_){
 					std::cout << "non enough difference" << std::endl;
-					hit[j] = 0;				
-					caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-					caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-					caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-					caffe_array[j].class3=(char*)predictions[j][3].first.c_str();
-					caffe_array[j].class4=(char*)predictions[j][4].first.c_str();
+					hit[j+loop*10] = 0;				
+					caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
+					caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
+					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
+					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
+					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 					continue;
 				}
 
@@ -757,14 +760,15 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					Prediction p = predictions[j][k];
 					std::cout << p.second << " - " << p.first << std::endl;
 				}
-				hit[j] = 1;
-				caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-				caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-				caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-				caffe_array[j].class3=(char*)predictions[j][3].first.c_str();
-				caffe_array[j].class4=(char*)predictions[j][4].first.c_str();
+				hit[j+loop*10] = 1;
+				caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
+				caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
+				caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
+				caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
+				caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 			}
 			imgs.clear();
+			loop = loop + 1;
     	}
 
     }
@@ -811,7 +815,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 			if(std::strcmp(text_prediction_modified.c_str(), "HOW") == 0){
 				caffe_turn << text_prediction_modified << ": turn left";
 			}
-    		this->draw_annotation(im_rgb_to_pub, draw_rect, caffe_turn.str(), cv::Scalar(0, 255, 0), 0);
+    		this->draw_annotation(im_rgb_to_pub, draw_rect, caffe_class_array.caffe_array[i].class0, cv::Scalar(0, 255, 0), 0);
     	}
     }
 
