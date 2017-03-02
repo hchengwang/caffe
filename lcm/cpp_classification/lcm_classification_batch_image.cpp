@@ -70,6 +70,7 @@ public:
 	void set_cpu(int is_cpu);
 	void set_threshold(double pred_threshold, double diff_threshold);
 	void set_batch_size(int batch_size);
+	void set_output_number(int output_number);
 	void draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,cv::Scalar color, int shift_x);
 	void run();
 	void finish();
@@ -135,6 +136,8 @@ private:
 	// get image;
 	int image_number_;
 	bool get_image_;
+	// output channel;
+	int output_number_;
 	// LCM Message Channels
 	std::string image_channel_;
 
@@ -232,6 +235,9 @@ void Classifier::set_threshold(double pred_threshold, double diff_threshold){
 }
 void Classifier::set_batch_size(int batch_size){
 	batch_size_ = batch_size;
+}
+void Classifier::set_output_number(int output_number){
+	this->output_number_ = output_number;
 }
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
@@ -468,16 +474,17 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
           cv::resize(sample, sample_resized, input_geometry_);
         else
           sample_resized = sample;
-
+      	//std::cout << sample_resized << std::endl;
         cv::Mat sample_float;
         if (num_channels_ == 3)
           sample_resized.convertTo(sample_float, CV_32FC3);
         else
           sample_resized.convertTo(sample_float, CV_32FC1);
-
         //cv::Mat sample_normalized;
         //cv::subtract(sample_float, mean_, sample_normalized);
 
+      	cv::normalize(sample_float, sample_float, 0, 255, NORM_MINMAX, CV_32FC1);
+      	//std::cout << sample_float << std::endl;
         /* This operation will write the separate BGR planes directly to the
          * input layer of the network because it is wrapped by the cv::Mat
          * objects in input_channels. */
@@ -684,13 +691,19 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
     	crop_rect.width = proposals_msg->proposals[i].width;
        	crop_rect.height = proposals_msg->proposals[i].height;
        	std::cout << crop_rect.x << "," << crop_rect.y << "," << crop_rect.width << "," << crop_rect.height << std::endl;
+       	std::stringstream image_name;
+
+       	// write image
+       	//image_name << "crop_image/" << this->image_number_ << ".jpg";
+       	//cv::imwrite(image_name.str(), this->img_(crop_rect));
+       	//this->image_number_ = this->image_number_ + 1;
 
 	 	if(imgs.size() < batch_size_){
       		imgs.push_back(this->img_(crop_rect));	
     	}
     	if( i == (proposals_msg->n - 1)){
     		std::cout << "rest images" << std::endl;
-    		predictions = this->ClassifyBatch(imgs, 28);
+    		predictions = this->ClassifyBatch(imgs, this->output_number_);
 
 			for (int j = 0; j < predictions.size(); j++) {
 				std::cout << "logfiff : " << std::log10(predictions[j][0].second/predictions[j][1].second) << std::endl;
@@ -702,6 +715,10 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
 					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
 					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
+									for (int k = 0; k < 5; k++) {
+					Prediction p = predictions[j][k];
+					std::cout << p.second << " - " << p.first << std::endl;
+				}
 					continue;
 				}
 				if(std::log10(predictions[j][0].second/predictions[j][1].second) <= this->diff_threshold_){
@@ -712,6 +729,10 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
 					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
 					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
+									for (int k = 0; k < 5; k++) {
+					Prediction p = predictions[j][k];
+					std::cout << p.second << " - " << p.first << std::endl;
+				}
 					continue;
 				}
 				for (int k = 0; k < 5; k++) {
@@ -731,7 +752,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 
     	if(imgs.size() == batch_size_){
     		std::cout << "up to batch size images" << std::endl;
-    		predictions = this->ClassifyBatch(imgs, 28);
+    		predictions = this->ClassifyBatch(imgs, this->output_number_);
 
 			for (int j = 0; j < predictions.size(); j++) {
 				std::cout << "logfiff : " << std::log10(predictions[j][0].second/predictions[j][1].second) << std::endl;
@@ -957,8 +978,15 @@ int main(int argc, char** argv) {
 	double pred_threshold;
 	double diff_threshold;
  	int batch_size;
+ 	int output_number;
 
 	/* set threshold */
+
+	if(std::strcmp(argv[13], "output_number") == 0){
+		output_number = atof(argv[14]);
+		classifier.set_output_number(output_number);
+	}
+
 	if(std::strcmp(argv[8], "threshold") == 0){
 		pred_threshold = atof(argv[9]);
 		diff_threshold = atof(argv[10]);
