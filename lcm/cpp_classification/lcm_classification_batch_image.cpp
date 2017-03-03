@@ -716,8 +716,8 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
 					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 									for (int k = 0; k < 5; k++) {
-					Prediction p = predictions[j][k];
-					std::cout << p.second << " - " << p.first << std::endl;
+					//Prediction p = predictions[j][k];
+					//std::cout << p.second << " - " << p.first << std::endl;
 				}
 					continue;
 				}
@@ -730,8 +730,8 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					caffe_array[j+loop*10].class3=(char*)predictions[j][3].first.c_str();
 					caffe_array[j+loop*10].class4=(char*)predictions[j][4].first.c_str();
 									for (int k = 0; k < 5; k++) {
-					Prediction p = predictions[j][k];
-					std::cout << p.second << " - " << p.first << std::endl;
+					//Prediction p = predictions[j][k];
+					//std::cout << p.second << " - " << p.first << std::endl;
 				}
 					continue;
 				}
@@ -739,7 +739,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 					Prediction p = predictions[j][k];
 					std::cout << p.second << " - " << p.first << std::endl;
 				}
-					hit[j+loop*10] = 0;				
+					hit[j+loop*10] = 1;				
 					caffe_array[j+loop*10].class0=(char*)predictions[j][0].first.c_str();
 					caffe_array[j+loop*10].class1=(char*)predictions[j][1].first.c_str();
 					caffe_array[j+loop*10].class2=(char*)predictions[j][2].first.c_str();
@@ -824,6 +824,7 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 			std::string text_prediction_modified;
 			text_prediction_modified = caffe_class_array.caffe_array[i].class0;
 			text_prediction_modified.erase(text_prediction_modified.length()-1);
+			/*
 			if(std::strcmp(text_prediction_modified.c_str(), "LEONARD") == 0){
 				caffe_turn << text_prediction_modified << ": turn right";
 			}
@@ -837,6 +838,9 @@ void Classifier::on_quad_proposals(const april_tags_quad_proposals_t* proposals_
 				caffe_turn << text_prediction_modified << ": turn left";
 			}
     		this->draw_annotation(im_rgb_to_pub, draw_rect, caffe_class_array.caffe_array[i].class0, cv::Scalar(0, 255, 0), 0);
+    		*/
+    		std::cout << "get hit" << std::endl;
+    		this->draw_annotation(im_rgb_to_pub, draw_rect, text_prediction_modified, cv::Scalar(0, 255, 0), 0);
     	}
     }
 
