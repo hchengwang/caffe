@@ -33,6 +33,8 @@
 #include <lcmtypes/april_tags_quad_proposals_t.h>
 #include "lcmtypes/april_tags_caffe_class_t.h"
 #include "lcmtypes/april_tags_caffe_class_array_t.h"
+#include "lcmtypes/april_tags_gd_class_t.h"
+#include "lcmtypes/april_tags_gd_class_array_t.h"
 #include <jpeg-utils/jpeg-utils.h>
 #include <jpeg-utils/jpeg-utils-ijg.h>
 
@@ -675,6 +677,8 @@ void Classifier::image_preprocess( ) {
     int hit[batch_size_];
     april_tags_caffe_class_t caffe_array[batch_size_];
     april_tags_caffe_class_array_t caffe_class_array;
+    april_tags_gd_class_t gd_array[batch_size_];
+    april_tags_gd_class_array_t gd_class_array;
 
     predictions = this->ClassifyBatch(this->imgs_, this->output_number_);
 
@@ -683,21 +687,17 @@ void Classifier::image_preprocess( ) {
 		for (int k = 0; k < this->output_number_; k++)
 		{
 			Prediction p = predictions[j][k];
-			std::cout << p.second << " - " << p.first << std::endl;
+			std::cout << p.first << " - " << p.second << std::endl;
+
+			gd_array[j].classes[k] = (char*)predictions[j][k].first.c_str();
+			gd_array[j].probs[k] = predictions[j][k].second;
 		}
-      				
-		caffe_array[j].class0=(char*)predictions[j][0].first.c_str();
-		caffe_array[j].class1=(char*)predictions[j][1].first.c_str();
-		caffe_array[j].class2=(char*)predictions[j][2].first.c_str();
-		caffe_array[j].class3=(char*)predictions[j][2].first.c_str();
-		caffe_array[j].class4=(char*)predictions[j][2].first.c_str();
-		hit[j] = j;
+		std::cout << "--------------------------" << std::endl;
 	}
 
-	caffe_class_array.n = batch_size_;
-	caffe_class_array.hit = hit;
-	caffe_class_array.caffe_array = caffe_array;
-	april_tags_caffe_class_array_t_publish(lcm_, "caffe_class_array", &caffe_class_array);
+	gd_class_array.n = batch_size_;
+	gd_class_array.gd_array = gd_array;
+	april_tags_gd_class_array_t_publish(lcm_, "gd_class_array", &gd_class_array);
 
 }
 

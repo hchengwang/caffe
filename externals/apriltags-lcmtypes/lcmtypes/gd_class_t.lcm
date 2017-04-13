@@ -1,0 +1,5 @@
+package april_tags;
+struct gd_class_t {
+  string classes[3];
+  float probs[3];
+}

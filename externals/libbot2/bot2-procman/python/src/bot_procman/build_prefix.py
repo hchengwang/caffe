@@ -1,1 +1,1 @@
-BUILD_PREFIX='/home/joinet/caffe/build'
+BUILD_PREFIX='/home/robotvision/caffe/build'
