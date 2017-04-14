@@ -687,7 +687,7 @@ void Classifier::image_preprocess( ) {
 		for (int k = 0; k < this->output_number_; k++)
 		{
 			Prediction p = predictions[j][k];
-			std::cout << p.first << " - " << p.second << std::endl;
+			std::cout << p.second << " - " << p.first << std::endl;
 
 			gd_array[j].classes[k] = (char*)predictions[j][k].first.c_str();
 			gd_array[j].probs[k] = predictions[j][k].second;
