@@ -3,6 +3,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/calib3d/calib3d.hpp>
 #endif  // USE_OPENCV
 #include <algorithm>
 #include <iosfwd>
@@ -28,11 +29,26 @@
 #include <GL/gl.h>
 #include <lcmtypes/april_tags_tag_text_detection_t.h>
 #include <lcmtypes/april_tags_tag_text_detections_t.h>
+#include "lcmtypes/april_tags_caffe_class_t.h"
+#include <jpeg-utils/jpeg-utils.h>
+#include <jpeg-utils/jpeg-utils-ijg.h>
 
+#include <time.h>
 using namespace caffe;  // NOLINT(build/namespaces)
+using namespace cv;
 using std::string;
 
 #define CPU_ONLY
+int64_t start_time;
+unsigned long GetTickCount()
+{
+    struct timespec ts;
+
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    return (ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+
+}
 
 /* Pair (label, confidence) representing a prediction. */
 typedef std::pair<string, float> Prediction;
@@ -42,17 +58,20 @@ public:
 	Classifier(const string& model_file,
 			const string& trained_file,
 			const string& mean_file,
-			const string& label_file);
+			const string& label_file,
+			const string& gpu_cpu);
 
 	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
 
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
+	void set_threshold(double pred_threshold_, double diff_threshold_);
 	void run();
 	void finish();
 
 	// Message Handler
 	void on_libbot(const bot_core_image_t *msg);
+	void on_libbot_daniel(const bot_core_image_t *msg);
 	static void on_libbot_aux(const lcm_recv_buf_t* rbuf,
 			const char* channel,
 			const bot_core_image_t* msg,
@@ -85,27 +104,41 @@ private:
 	std::vector<string> labels_;
 
 	lcm_t* lcm_;
+	april_tags_caffe_class_t caffe_class_;
+	//april_tags_caffe_class_t* caffe_class_;
 	cvBridgeLCM * cv_bridge_lcm_;
 	//bot_lcmgl_t* lcmgl_;
 	bool finish_;
+	// threshold 
+	double pred_threshold_;
+	double diff_threshold_;
+
 	// LCM Message Channels
 	std::string image_channel_;
-    //brian
-    cv::Mat image;
-    //
 
 };
 
 Classifier::Classifier(const string& model_file,
 		const string& trained_file,
 		const string& mean_file,
-		const string& label_file) {
+		const string& label_file,
+		const string& gpu_cpu) {
 
-	if(this->is_cpu_ > 0){
+	//if(this->is_cpu_ > 0){
+	//	Caffe::set_mode(Caffe::CPU);
+	//}else{
+	//	Caffe::set_mode(Caffe::GPU);
+	//}
+
+	if(std::strcmp(gpu_cpu.c_str(),"CPU") == 0){
 		Caffe::set_mode(Caffe::CPU);
 	}else{
 		Caffe::set_mode(Caffe::GPU);
 	}
+
+	/* Set threshold */
+	//this->pred_threshold_ = 0.9;
+	//this->diff_threshold_ = 3;
 
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));
@@ -119,11 +152,12 @@ Classifier::Classifier(const string& model_file,
 	CHECK(num_channels_ == 3 || num_channels_ == 1)
 	<< "Input layer should have 1 or 3 channels.";
 	input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
-
+	
+	
 	/* Load the binaryproto mean file. */
-	if(boost::filesystem::exists(mean_file)){
-		SetMean(mean_file);
-	}
+	//;if(boost::filesystem::exists(mean_file)){
+	//	SetMean(mean_file);
+	//}
 
 	/* Load labels. */
 	std::ifstream labels(label_file.c_str());
@@ -145,7 +179,7 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
 	//this->lcmgl_ = bot_lcmgl_init(lcm, "LCMGL_MOCAP");
         //brian
         cv::Mat image;
-        //
+        
 	bot_core_image_t_subscription_t* sub = bot_core_image_t_subscribe(
 			lcm, image_channel.c_str(), Classifier::on_libbot_aux, this);
 
@@ -154,13 +188,17 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
 			lcm, atags_channel, Classifier::on_tag_text_detections_aux, this);
 
 	cv_bridge_lcm_ = new cvBridgeLCM(lcm, lcm);
-
+	//caffe_class_ = new april_tags_caffe_class_t;
 	finish_ = false;
 
 }
 
 void Classifier::set_cpu(int is_cpu){
 	this->is_cpu_ = 1;
+}
+void Classifier::set_threshold(double pred_threshold, double diff_threshold){
+	this->pred_threshold_ = pred_threshold;
+	this->diff_threshold_ = diff_threshold;
 }
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
@@ -242,10 +280,11 @@ std::vector<float> Classifier::Predict(const cv::Mat& img) {
 	net_->Reshape();
 
 	std::vector<cv::Mat> input_channels;
+
 	WrapInputLayer(&input_channels);
 
 	Preprocess(img, &input_channels);
-
+	std::cout << "input size : " << input_channels.size() << std::endl;
 	net_->Forward();
 
 	/* Copy the output layer to a std::vector */
@@ -299,23 +338,123 @@ void Classifier::Preprocess(const cv::Mat& img,
 		sample_resized.convertTo(sample_float, CV_32FC3);
 	else
 		sample_resized.convertTo(sample_float, CV_32FC1);
-
-	cv::Mat sample_normalized;
-	cv::subtract(sample_float, mean_, sample_normalized);
+	//**important modified for no mean file(comment the below two lines)
+	//cv::Mat sample_normalized;
+	//cv::subtract(sample_float, mean_, sample_normalized);
 
 	/* This operation will write the separate BGR planes directly to the
 	 * input layer of the network because it is wrapped by the cv::Mat
 	 * objects in input_channels. */
-	cv::split(sample_normalized, *input_channels);
+	//**important modified for no mean file(change sample_normalized to sample_float)	
+	cv::split(sample_float, *input_channels);
 
 	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
 			== net_->input_blobs()[0]->cpu_data())
 	<< "Input channels are not wrapping the input layer of the network.";
 }
 
-void Classifier::on_libbot(const bot_core_image_t* image_msg) {
-	std::cout << "img" << std::endl;
+void Classifier::on_libbot_daniel(const bot_core_image_t* image_msg) {
+	std::cout << "callback" << std::endl;
+	start_time = bot_timestamp_now();
+//Modified for text detection by Daniel
+	
+	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+	if(image_msg->pixelformat == BOT_CORE_IMAGE_T_PIXEL_FORMAT_MJPEG){
+	//jpegijg_decompress_8u_rgb (image_msg->data, image_msg->size,im_rgb.data, image_msg->width, image_msg->height, image_msg->width * 3);
+	}
+	cv::Mat im_rgb_flipx, im_rgb_flipy, im_thres;
+	//cv::flip(im_rgb, im_rgb_flipx, 0);
+	//cv::flip(im_rgb_flipx, im_rgb_flipy, 1);
+	cv::inRange(im_rgb, cv::Scalar(103, 142, 45), cv::Scalar(123, 179, 119), im_thres);
+	cv::resize(im_thres, im_thres, cv::Size(160,120));
+	Mat element = getStructuringElement(MORPH_RECT,Size(2,2));
+	cv::dilate(im_thres, im_thres, element);
+	//cv_bridge_lcm_->publish_gray(im_thres, (char*)"IMAGE_THRES");
+	vector<vector<Point> > contours;
+  	vector<Vec4i> hierarchy;
+	findContours( im_thres, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) ); 
+	vector<RotatedRect> minRect( contours.size() );
+	int rect_num=0;
+	//std::cout << "contour size" << contours.size() << std::endl;
+	for( int i = 0; i < contours.size(); i++ ){
+	//std::cout << contourArea(contours[i]) << std::endl;
+	if(contourArea(contours[i])>200){
+	drawContours( im_thres, contours, i, 100, 1, 8, vector<Vec4i>(), 0, Point() );	
+	minRect[rect_num] = minAreaRect( Mat(contours[i]) );
+	
+	rect_num++;
+	}
+	}
+	Point2f vertices[4];
+	
+	for (int index = 0; index < rect_num; index++){
+	minRect[index].points(vertices);
+	std::cout << "////////" << std::endl << vertices[0].x << " " << vertices[1].x << " " << vertices[2].x << " " << vertices[3].x << std::endl;
+	std::cout << vertices[0].y << " " << vertices[1].y << " " << vertices[2].y << " " << vertices[3].y  << std::endl;	
+	for (int i = 0; i < 4; i++)
+	line(im_thres, vertices[i], vertices[(i+1)%4], 100);
+	}
+	//cv_bridge_lcm_->publish_gray(im_thres, (char*)"IMAGE_BOX");
 
+	vector<Point2f> inputpts, outputpts;
+	float centerx=(vertices[0].x+vertices[1].x+vertices[2].x+vertices[3].x)/4, centery=(vertices[0].y+vertices[1].y+vertices[2].y+vertices[3].y)/4;
+	for(int i=0; i<4; i++){
+	if((vertices[i].x<=centerx)&&(vertices[i].y<=centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
+	}	
+	for(int i=0; i<4; i++){
+	if((vertices[i].x<=centerx)&&(vertices[i].y>centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
+	}
+for(int i=0; i<4; i++){
+	if((vertices[i].x>centerx)&&(vertices[i].y>centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
+	}
+for(int i=0; i<4; i++){
+	if((vertices[i].x>centerx)&&(vertices[i].y<=centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
+	}
+
+	outputpts.push_back(Point2f(float(0), float(0)));
+    	outputpts.push_back(Point2f(float(0), float(31)));
+    	outputpts.push_back(Point2f(float(99), float(31)));
+    	outputpts.push_back(Point2f(float(99), float(0)));
+	Mat transMat = findHomography( inputpts, outputpts, 0 );
+   	Mat outputgray = Mat::zeros(32, 100, CV_8UC1);
+    	Mat output;
+	
+    	warpPerspective(im_rgb, output, transMat, Size(100, 32));
+	cvtColor(output, outputgray, CV_BGR2GRAY);
+	for(int i=0; i<4; i++)	
+	circle(im_rgb, Point2f(vertices[i].x*4,vertices[i].y*4), 2, Scalar(0, 0, 200), -1);
+	//cv_bridge_lcm_->publish_mjpg(im_rgb_flipy, (char*)"IMAGE_flip");	
+	//cv_bridge_lcm_->publish_mjpg(output, (char*)"IMAGE_cropped");	
+	std::cout<<"region_prop time"<<bot_timestamp_now()-start_time<<"us"<<std::endl;
+	
+	unsigned long t_init = GetTickCount();
+	std::vector<Prediction> predictions = this->Classify(output);
+	
+	for (size_t i = 0; i < predictions.size(); ++i) {
+			Prediction p = predictions[i];
+			std::cout << std::fixed << i << " " <<std::setprecision(4) << p.second << " - \""<< p.first << "\"" << std::endl;
+		}
+	unsigned long t_last = GetTickCount();
+	std::cout << "classifying time: " << t_last-t_init<< "ms" << std::endl;
+
+	
+	char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
+	strcpy(temp0, predictions[0].first.c_str());
+	strcpy(temp1, predictions[1].first.c_str());
+	strcpy(temp2, predictions[2].first.c_str());
+	strcpy(temp3, predictions[3].first.c_str());
+	strcpy(temp4, predictions[4].first.c_str());
+	
+	
+	caffe_class_.class0=temp0;
+	caffe_class_.class1=temp1;
+	caffe_class_.class2=temp2;
+	caffe_class_.class3=temp3;
+	caffe_class_.class4=temp4;
+	
+
+
+	april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
 //	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
 //	cv::Mat im_vis = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
 //
@@ -332,6 +471,69 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 //	cv::Mat im_rect = cv::Mat::zeros(im_rgb.rows, im_rgb.cols, CV_8UC1);
 //	cv::cvtColor(im_rgb, im_rect, CV_RGB2GRAY);
 	// TODO: rectify image
+}
+
+void Classifier::on_libbot(const bot_core_image_t* image_msg) {
+
+	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+	cv::Mat im_vis = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
+	
+	if(image_msg->pixelformat == BOT_CORE_IMAGE_T_PIXEL_FORMAT_MJPEG){
+//		// jpeg decompress
+		jpegijg_decompress_8u_rgb (image_msg->data, image_msg->size,im_rgb.data, image_msg->width, image_msg->height, image_msg->width * 3);
+	}else {
+		im_rgb.data = image_msg->data;
+	}
+	//im_rgb.data = image_msg->data;
+//        //brian
+//        this->image = im_rgb;
+//        //
+	cv::Mat im_rect = cv::Mat::zeros(im_rgb.rows, im_rgb.cols, CV_8UC1);
+	cv::cvtColor(im_rgb, im_rect, CV_RGB2GRAY);
+	// TODO: rectify image
+	cv::Mat img;
+	//cv::Mat img = cv::imread(file, -1);
+	img = im_rect;
+	CHECK(!img.empty()) << "Unable to decode image ";
+
+	std::vector<Prediction> predictions = this->Classify(img, 5);
+
+	/* prediction evaluation */
+	std::cout << "logfiff : " << std::log10(predictions[0].second/predictions[1].second) << std::endl;
+	if(predictions[0].second <= this->pred_threshold_){
+		std::cout << "under prediction threshold" << std::endl;
+		return;
+	}
+	if(std::log10(predictions[0].second/predictions[1].second) <= this->diff_threshold_){
+		std::cout << "non enough difference" << std::endl;
+		return;
+	}
+
+	/* Print the top N predictions. */
+	for (size_t i = 0; i < predictions.size(); ++i) {
+		Prediction p = predictions[i];
+		//std::cout << std::fixed << std::setprecision(10) << p.second << " - \""
+		//		<< p.first << "\"" << std::endl;
+		std::cout << p.second << " - " << p.first << std::endl;
+		/* write prediction output */
+	}
+
+	char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
+	strcpy(temp0, predictions[0].first.c_str());
+	strcpy(temp1, predictions[1].first.c_str());
+	strcpy(temp2, predictions[2].first.c_str());
+	strcpy(temp3, predictions[3].first.c_str());
+	strcpy(temp4, predictions[4].first.c_str());
+ 
+
+	caffe_class_.class0=temp0;
+	caffe_class_.class1=temp1;
+	caffe_class_.class2=temp2;
+	caffe_class_.class3=temp3;
+	caffe_class_.class4=temp4;
+
+	april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
+
 }
 
 void Classifier::on_tag_text_detection (
@@ -430,7 +632,18 @@ int main(int argc, char** argv) {
 	string trained_file = argv[2];
 	string mean_file    = argv[3];
 	string label_file   = argv[4];
-	Classifier classifier(model_file, trained_file, mean_file, label_file);
+	string gpu_cpu = argv[7];
+	Classifier classifier(model_file, trained_file, mean_file, label_file, gpu_cpu);
+
+	double pred_threshold;
+	double diff_threshold;
+
+	/* set threshold */
+	if(std::strcmp(argv[8], "threshold") == 0){
+		pred_threshold = atof(argv[9]);
+		diff_threshold = atof(argv[10]);
+		classifier.set_threshold(pred_threshold, diff_threshold);
+	}
 
 	if(std::strcmp(argv[7], "CPU") == 0){
 		classifier.set_cpu(1);
@@ -444,6 +657,7 @@ int main(int argc, char** argv) {
 
 		cv::Mat img = cv::imread(file, -1);
 		CHECK(!img.empty()) << "Unable to decode image " << file;
+		//cv::resize(img, img, cv::Size(32,100));
 		std::vector<Prediction> predictions = classifier.Classify(img);
 
 		/* Print the top N predictions. */
@@ -465,6 +679,7 @@ int main(int argc, char** argv) {
 
 			std::cout << "---------- Prediction for "
 					<< frames_to_process[f] << " ----------" << std::endl;
+			unsigned long t_init = GetTickCount();
 
 			cv::Mat img = cv::imread(frames_to_process[f], -1);
 
@@ -476,8 +691,10 @@ int main(int argc, char** argv) {
 				Prediction p = predictions[i];
 				std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
 						<< p.first << "\"" << std::endl;
+			
 			}
-
+			unsigned long t_last = GetTickCount();
+	std::cout << "classifying time: " << t_last-t_init<< "ms" << std::endl;
 		}
 
 	}else if(std::strcmp(argv[5], "lcm") == 0){
@@ -486,11 +703,12 @@ int main(int argc, char** argv) {
 
 		lcm_t* lcm = lcm_create(NULL);
 		classifier.set_lcm(lcm, image_channel);
+		
 		std::cout << "---------- Prediction for "
 				<< "lcm input channel " << image_channel << " ----------" << std::endl;
-
+		
 		classifier.run();
-
+		
 	}
 
 
