@@ -1,0 +1,5 @@
+package april_tags;
+struct class_t {
+  string type;
+  float prob;
+}
