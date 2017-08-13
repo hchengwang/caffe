@@ -90,6 +90,8 @@ public:
     std::pair<float , float> tf_probs2vel(april_tags_gd_class_t gd_class);
 	float tf_probs2omega(float prob);
 	void draw_arrowimage(float tmp_v, float tmp_omega, int j, cv::Scalar color);
+	void draw_prob_bar(april_tags_gd_class_array_t* gd_class_array);
+	int get_predition_output_index(string output);
 
 private:
 	void SetMean(const string& mean_file);
@@ -460,12 +462,12 @@ void Classifier::image_preprocess( ) {
 	gd_class_array.batch_size = this->batch_size_;
 	april_tags_gd_class_array_t_publish(lcm_, "gd_class_array", &gd_class_array);
 	if(this->motion_visual_){
-    	this->carcmd_visualization(&gd_class_array);
-
+    	//this->carcmd_visualization(&gd_class_array);
+        this->draw_prob_bar(&gd_class_array);
     	std::stringstream drawn_image_topic;
     	drawn_image_topic << "image_with_motion_arrow";
     	for (int i = 0; i < this->batch_size_; i++){
-     		cv_bridge_lcm_->publish_mjpg(this->imgs_[i], (char*)drawn_image_topic.str().c_str());   		
+     	    cv_bridge_lcm_->publish_mjpg(this->imgs_[i], (char*)drawn_image_topic.str().c_str());   		
     	}
 	}
 }
@@ -582,7 +584,49 @@ void Classifier::draw_arrowimage(float tmp_v,float tmp_omega,int j,cv::Scalar co
 	//std:: cout << " end = " << end_x << ", " << end_y << std::endl;
     //cv_bridge_lcm_->publish_mjpg(this->imgs_[j], (char*)drawn_image_topic.str().c_str());
 
+}
 
+int Classifier::get_predition_output_index(std::string output){
+	int index = 0;
+    std::string class3[3];
+    class3[0] = 'L';
+    class3[1] = 'S';
+    class3[2] = 'R';
+    output.erase(output.length()-1);
+	for(int i = 0; i < 3; i++){
+		if(class3[i].compare(output) == 0){
+			index = i;
+		}
+	}
+	return index;
+}
+
+void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
+
+    std::pair<float, float> twist;
+    std::pair<float, float> vel;
+    cv::Point bar_start;  
+    cv::Point bar_end;
+    cv::Point bar_bg_end;
+    int shift;
+    int bar_width = 50;
+    int bar_left_bound = int ( (this->imgs_[0].size().width) / 2 - (bar_width * this->output_number_ / 2));
+    int bar_height_bound = int (this->imgs_[0].size().height);
+
+    for (int i = 0; i < this->batch_size_; i++){
+        if (this->imgs_[i].empty()) break;  
+        for(int j = 0; j < this->output_number_; j++){
+        	std::cout << j <<std::endl;
+            shift = this->get_predition_output_index(gd_class_array->gd_array[i].preds[j].type);
+            bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
+            bar_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound - int(gd_class_array->gd_array[i].preds[j].prob * 100));
+            bar_bg_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound -100);
+            std::cout << bar_start << bar_end << std::endl;
+            cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
+            cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
+        }
+    }
+    
 }
 
 
