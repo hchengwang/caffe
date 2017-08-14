@@ -588,13 +588,14 @@ void Classifier::draw_arrowimage(float tmp_v,float tmp_omega,int j,cv::Scalar co
 
 int Classifier::get_predition_output_index(std::string output){
 	int index = 0;
-    std::string class3[3];
-    class3[0] = 'L';
-    class3[1] = 'S';
-    class3[2] = 'R';
-    output.erase(output.length()-1);
-	for(int i = 0; i < 3; i++){
-		if(class3[i].compare(output) == 0){
+
+    //output.erase(output.length()-1);
+	for(int i = 0; i <  this->output_number_; i++){
+		//std::cout << this->labels_[i] <<std::endl;
+		//std::cout << output <<std::endl;
+		
+		if(this -> labels_[i].compare(output) == 0){
+			std::cout << this->labels_[i] <<std::endl;
 			index = i;
 		}
 	}
@@ -605,9 +606,11 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
 
     std::pair<float, float> twist;
     std::pair<float, float> vel;
+    std::string label;
     cv::Point bar_start;  
     cv::Point bar_end;
     cv::Point bar_bg_end;
+    cv::Point label_point;
     int shift;
     int bar_width = 50;
     int bar_left_bound = int ( (this->imgs_[0].size().width) / 2 - (bar_width * this->output_number_ / 2));
@@ -624,6 +627,10 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
             std::cout << bar_start << bar_end << std::endl;
             cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
             cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
+            label = this->labels_[shift];
+            label.erase(label.length()-1);
+            label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
+            cv::putText(this->imgs_[i],label,label_point,0,0.5,cv::Scalar(255, 170, 0),2);
         }
     }
     
