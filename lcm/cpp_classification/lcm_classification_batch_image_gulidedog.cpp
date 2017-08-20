@@ -719,6 +719,8 @@ int main(int argc, char** argv) {
  	string config_file_path;
  	string mode;
  	string image_channel;
+ 	string image_folder;
+ 	string test_file;
 
  	double pred_threshold;
 	double diff_threshold;
@@ -764,6 +766,10 @@ int main(int argc, char** argv) {
 					image_channel  = x[1];	
 				}else if(std::strcmp(x[0].c_str(), "motion_visual") == 0){
 					motion_visual  = atoi(x[1].c_str());
+				}else if(std::strcmp(x[0].c_str(), "image_folder") == 0){
+					image_folder  = x[1];
+				}else if(std::strcmp(x[0].c_str(), "test_file") == 0){
+					test_file  = x[1];
 				}
         		std::cout << x[0] << std::endl;
         		std::cout << x[1] << std::endl;
@@ -783,7 +789,6 @@ int main(int argc, char** argv) {
 
     if(std::strcmp(mode.c_str(), "lcm") == 0){
 
-
 		lcm_t* lcm = lcm_create(NULL);
 		classifier.set_lcm(lcm, image_channel);
 		
@@ -792,6 +797,137 @@ int main(int argc, char** argv) {
 		
 		classifier.run();
 		
+	}
+
+
+    if(std::strcmp(mode.c_str(), "test_file") == 0){
+
+        /* set up parameter */
+		int image_folder_image_number = 0;
+		vector<string> image_path;
+		vector<int> gt;
+		std::vector<cv::Mat> image_folder_imgs;
+		std::vector< std::vector<Prediction> > predictions;
+	    int testing_data_number = 100;
+        int hit[output_number];
+        int non_hit[output_number]; 
+        for (int i = 0; i < output_number; ++i){
+            hit[i] = 0;
+            non_hit[i] = 0;
+        }             
+
+        /* load images path and groundtruth */
+		if (!boost::filesystem::exists(test_file)){
+        	std::cout << "Can't find " << test_file << std::endl;
+    	}else{
+            std::cout << "read: " << test_file << std::endl;
+            std::ifstream inputFile(test_file.c_str());
+            string line;
+            while (getline(inputFile, line))
+            {
+                std::vector<std::string> strs;
+                boost::split(strs, line, boost::is_any_of(" "));
+                if(strs.size() < 1){
+                    break;
+                }
+                std::cout << strs[0] << strs[1] << std::endl;
+                image_path.push_back(strs[0]);
+                gt.push_back(atoi(strs[1].c_str()));;
+		    }
+		}
+        /* load label list */
+        std::vector<string> label_list;
+	    std::ifstream labels_out(label_file.c_str());
+	    CHECK(labels_out) << "Unable to open labels file " << label_file;
+	    string line;
+	    while (std::getline(labels_out, line))
+		    label_list.push_back(string(line));
+		for (int i = 0; i < 5; i++){
+			std::cout << label_list[i] << std::endl;
+		}         
+		/* output result txt file */
+		std::ofstream testing_reuslt;
+		std::stringstream ss;
+		ss << "testing_reuslt.txt";
+		std::cout << ss.str().c_str() << " created"<< std::endl;
+        testing_reuslt.open(ss.str().c_str());
+
+        /* do prediction */
+		for(int f = 0; f < image_path.size(); f++){
+            image_folder_image_number ++;
+			std::cout << "---------- Prediction for "
+					<< image_path[f] << " ----------" << std::endl;
+            cv::Mat img = cv::imread(image_path[f], -1);
+            image_folder_imgs.push_back(img);
+            if(image_folder_imgs.size() == batch_size || image_folder_image_number == testing_data_number){
+                if(image_folder_image_number == testing_data_number){
+                	int delta_image = batch_size - image_folder_imgs.size();
+                    for(int j = 0; j < delta_image; j++){
+                        image_folder_imgs.push_back(img);
+                    }
+                    f = f + delta_image;
+                }
+
+                unsigned long t_init = GetTickCount();
+                predictions = classifier.ClassifyBatch(image_folder_imgs, output_number);
+                unsigned long t_last = GetTickCount();
+	            std::cout << "classifying time: " << t_last-t_init<< "ms" << std::endl;
+	            for (int j=0; j < batch_size; j++){
+	            	int index = f - batch_size + 1 + j;
+	            	std::cout << "image number: " << index << std::endl;
+	            	if( index < testing_data_number){
+	            		string gt_label = label_list[gt[index]];
+	            		testing_reuslt << index << "," << image_path[index] << "," << gt_label.erase(gt_label.length() - 1) << ',';
+		            	for (int k = 0; k < output_number; k++){
+			            	Prediction p = predictions[j][k];
+			            	std::cout << p.second << " - " << p.first << std::endl; 
+			            	testing_reuslt << p.second << "," << p.first.erase(p.first.length() - 1) << ',';   
+		            	}	
+		            	if(label_list[gt[index]].compare(predictions[j][0].first) == 0){
+                        	hit[gt[index]] ++;
+                        	testing_reuslt << "hit" << std::endl;
+		            	}else{
+                        	non_hit[gt[index]] ++;
+                        	testing_reuslt << "non_hit" << std::endl;
+		            	}
+                    	for (int i = 0; i < output_number; ++i){
+                        	std::cout << label_list[i] << " hit: " << hit[i] << " non_hit: " << non_hit[i] << std::endl;
+                    	}  	 
+                    }           
+		        std::cout << "--------------------------" << std::endl;
+
+              	}
+              	image_folder_imgs.clear();
+            }
+		}
+		testing_reuslt << "hit_number";
+		for(int i = 0; i < output_number; i++){
+			testing_reuslt << "," << hit[i];
+		}
+		testing_reuslt << std::endl;
+		testing_reuslt << "non_hit_number";
+		for(int i = 0; i < output_number; i++){
+			testing_reuslt << "," << non_hit[i];
+		}
+		testing_reuslt << std::endl;
+		testing_reuslt << "accuracy";
+		for(int i = 0; i < output_number; i++){
+			testing_reuslt << "," << (double) hit[i] / (hit[i] + non_hit[i]);
+		}
+		testing_reuslt << std::endl;
+		testing_reuslt << "average accuracy";
+		int image_sum = 0;
+		int hit_sum = 0;
+		for(int i = 0; i < output_number; i++){
+			image_sum += hit[i];
+			image_sum += non_hit[i];
+			hit_sum += hit[i];
+		}
+		testing_reuslt << "," << (double) hit_sum  / image_sum;
+		testing_reuslt << std::endl;		
+		
+
+
 	}
 
 
