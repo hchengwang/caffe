@@ -179,9 +179,10 @@ Classifier::Classifier(const string& model_file,
 	
 	
 	/* Load the binaryproto mean file. */
-	//;if(boost::filesystem::exists(mean_file)){
-	//	SetMean(mean_file);
-	//}
+	if(boost::filesystem::exists(mean_file)){
+		//std::cout << " get mean file" << std::endl;
+		//SetMean(mean_file);
+	}
 
 	/* Load labels. */
 	std::ifstream labels(label_file.c_str());
@@ -304,6 +305,7 @@ void Classifier::SetMean(const string& mean_file) {
 	/* Compute the global mean pixel value and create a mean image
 	 * filled with this value. */
 	cv::Scalar channel_mean = cv::mean(mean);
+	//channel_mean = cv::Scalar(136, 145, 154); // added by brian
 	mean_ = cv::Mat(input_geometry_, mean.type(), channel_mean);
 }
 
@@ -384,11 +386,31 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
           sample_resized.convertTo(sample_float, CV_32FC3);
         else
           sample_resized.convertTo(sample_float, CV_32FC1);
+
+
+        /* mean substraction for guidedog */
+        if (num_channels_ == 3){
+          cv::Mat m = cv::Mat(227, 227, CV_32FC3, cv::Scalar(136, 145, 154));
+          cv::subtract(sample_float, m, sample_float);}
+        else{
+          cv::Mat m = cv::Mat(101, 101, CV_32FC1, cv::Scalar(128));
+          cv::subtract(sample_float, m, sample_float);
+          sample_float = sample_float * 0.0078125;}
+
         //cv::Mat sample_normalized;
         //cv::subtract(sample_float, mean_, sample_normalized);
 
-      	cv::normalize(sample_float, sample_float, 0, 255, NORM_MINMAX, CV_32FC1);
-      	//std::cout << sample_float << std::endl;
+        //cv::subtract(sample_float, mean_, sample_float);
+        //double min, max;
+        //cv::minMaxLoc(mean_, &min, &max);
+        //std::cout << min << "," << max << std::endl;
+        //std::cout << mean_ << std::endl;
+
+        /* old normalize */
+        //cv::Mat sample_normalized;
+        //cv::subtract(sample_float, mean_, sample_normalized);
+      	//cv::normalize(sample_float, sample_float, 0, 255, NORM_MINMAX, CV_32FC1);
+
         /* This operation will write the separate BGR planes directly to the
          * input layer of the network because it is wrapped by the cv::Mat
          * objects in input_channels. */
@@ -808,7 +830,7 @@ int main(int argc, char** argv) {
 		vector<int> gt;
 		std::vector<cv::Mat> image_folder_imgs;
 		std::vector< std::vector<Prediction> > predictions;
-	    int testing_data_number = 100;
+	    int testing_data_number;
         int hit[output_number];
         int non_hit[output_number]; 
         for (int i = 0; i < output_number; ++i){
@@ -835,6 +857,7 @@ int main(int argc, char** argv) {
                 gt.push_back(atoi(strs[1].c_str()));;
 		    }
 		}
+		testing_data_number = gt.size();
         /* load label list */
         std::vector<string> label_list;
 	    std::ifstream labels_out(label_file.c_str());
@@ -858,6 +881,7 @@ int main(int argc, char** argv) {
 			std::cout << "---------- Prediction for "
 					<< image_path[f] << " ----------" << std::endl;
             cv::Mat img = cv::imread(image_path[f], -1);
+            //cv::Mat img = cv::imread(image_path[f], 0);
             image_folder_imgs.push_back(img);
             if(image_folder_imgs.size() == batch_size || image_folder_image_number == testing_data_number){
                 if(image_folder_image_number == testing_data_number){
