@@ -387,13 +387,13 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
         else
           sample_resized.convertTo(sample_float, CV_32FC1);
 
-
+        std::cout << "size: " << input_geometry_ << std::endl;
         /* mean substraction for guidedog */
         if (num_channels_ == 3){
-          cv::Mat m = cv::Mat(227, 227, CV_32FC3, cv::Scalar(136, 145, 154));
+          cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
           cv::subtract(sample_float, m, sample_float);}
         else{
-          cv::Mat m = cv::Mat(101, 101, CV_32FC1, cv::Scalar(128));
+          cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC1, cv::Scalar(128));
           cv::subtract(sample_float, m, sample_float);
           sample_float = sample_float * 0.0078125;}
 
@@ -484,10 +484,13 @@ void Classifier::image_preprocess( ) {
 	gd_class_array.batch_size = this->batch_size_;
 	april_tags_gd_class_array_t_publish(lcm_, "gd_class_array", &gd_class_array);
 	if(this->motion_visual_){
-    	//this->carcmd_visualization(&gd_class_array);
+		/* draw motion arrow */
+    	this->carcmd_visualization(&gd_class_array);
+    	/* draw probability bar */
         this->draw_prob_bar(&gd_class_array);
     	std::stringstream drawn_image_topic;
-    	drawn_image_topic << "image_with_motion_arrow";
+    	/* publish drawn iamges */
+    	drawn_image_topic << "image_with_motion_arrow_and_probability_bar";
     	for (int i = 0; i < this->batch_size_; i++){
      	    cv_bridge_lcm_->publish_mjpg(this->imgs_[i], (char*)drawn_image_topic.str().c_str());   		
     	}
@@ -500,10 +503,13 @@ void Classifier::carcmd_visualization(april_tags_gd_class_array_t* gd_class_arra
     std::pair<float, float> vel;
     for (int i = 0; i < this->batch_size_; i++){
         if (this->imgs_[i].empty()) break;
+        /* calculate v and omega from predictions*/
         twist = this->tf_probs2twist(gd_class_array->gd_array[i]); 
-        vel = this->tf_probs2vel(gd_class_array->gd_array[i]); 
-        std:: cout << " vel_left = " << vel.first << ", vel_right = " << vel.second << std::endl;
         std:: cout << " v = " << twist.first << ", omega = " << twist.second << std::endl;
+        /* calculate velocity_left and velocity_right from predictions*/       
+        //vel = this->tf_probs2vel(gd_class_array->gd_array[i]); 
+        //std:: cout << " vel_left = " << vel.first << ", vel_right = " << vel.second << std::endl;
+        /* draw motion arrow on sample images */
         this->draw_arrowimage(twist.first, twist.second, i,cv::Scalar(0, 0, 255));
     }
 }
@@ -550,27 +556,44 @@ std::pair<float , float> Classifier::tf_probs2twist(april_tags_gd_class_t gd_cla
 	float v, omega;
 	v = 0;
 	omega = 0;
-	float w_v[3] = {0,1,0};
-	float w_omega[3] = {-1,0,1};
+	std::vector<float> w_omega;
+	if(this->output_number_ == 3){
+		w_omega.push_back(-1);
+		w_omega.push_back(0);
+		w_omega.push_back(1);
+	}else if(this->output_number_ == 5){
+		w_omega.push_back(-1);
+		w_omega.push_back(0);
+		w_omega.push_back(0);
+		w_omega.push_back(0);
+		w_omega.push_back(1);
+	}
 	for (int i =  0; i < this->output_number_; i++){
 		for(int j = 0; j < labels_.size(); j++){
 			if(gd_class.preds[i].type == labels_[j]){
-				omega = omega - w_omega[j] *this->tf_probs2omega(gd_class.preds[i].prob);
-				v = v + w_v[j] * gd_class.preds[i].prob;
+				omega = omega + w_omega[j] * this->tf_probs2omega(gd_class.preds[i].prob);
 			}
+			v = 0.38;
 		}
 	}
     return std::make_pair(v,omega);
 }
 
 float Classifier::tf_probs2omega(float prob){
-	float o;
-	if(prob <= 0.2)
+	float o, omega_scalar, sig_interval, alpha;
+	omega_scalar = 9;
+	sig_interval = 10;
+	alpha = 0.4;
+	/* sigmoid transfer function */
+	prob = -sig_interval + prob * 2 * sig_interval;
+	o = 1 / (1 + std::exp(-prob * alpha)); 
+    o = o * omega_scalar;
+	/*if(prob <= 0.2)
         o  = prob /1.2;
     else if (prob >= 0.8)
         o = 1.8 + prob/(3-1.8);
     else
-        o = 1.2 + prob/(1.8-1.2);
+        o = 1.2 + prob/(1.8-1.2);*/
     return o ;
 }
 
@@ -617,7 +640,7 @@ int Classifier::get_predition_output_index(std::string output){
 		//std::cout << output <<std::endl;
 		
 		if(this -> labels_[i].compare(output) == 0){
-			std::cout << this->labels_[i] <<std::endl;
+			//std::cout << this->labels_[i] <<std::endl;
 			index = i;
 		}
 	}
@@ -639,16 +662,18 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
     int bar_height_bound = int (this->imgs_[0].size().height);
 
     for (int i = 0; i < this->batch_size_; i++){
+    	/* check images exit */
         if (this->imgs_[i].empty()) break;  
         for(int j = 0; j < this->output_number_; j++){
-        	std::cout << j <<std::endl;
+        	/* get bar left buttom and right top points */
             shift = this->get_predition_output_index(gd_class_array->gd_array[i].preds[j].type);
             bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
             bar_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound - int(gd_class_array->gd_array[i].preds[j].prob * 100));
             bar_bg_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound -100);
-            std::cout << bar_start << bar_end << std::endl;
+            /* draw probability bar */
             cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
             cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
+            /* write classes labels */
             label = this->labels_[shift];
             label.erase(label.length()-1);
             label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
@@ -730,6 +755,14 @@ int main(int argc, char** argv) {
 			<< std::endl;
 		return 1;
 	}*/
+
+	if (argc < 2) {
+		std::cerr << "Usage: " << argv[0]  << std::endl
+		    << "Example 1 (lcm): " << std::endl
+		    << " ./build/lcm/cpp_classification/lcm_classification_batch_image_gulidedog.bin configure /home/robotvision/icra2018-guidedog/config/VB/model_config_PDNN2_YB5_C_S_color.txt"
+		    << std::endl;
+		return 1;
+	}
 
 	::google::InitGoogleLogging(argv[0]);
 
