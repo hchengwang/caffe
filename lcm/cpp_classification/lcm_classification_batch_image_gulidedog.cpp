@@ -139,6 +139,7 @@ private:
 	bool motion_visual_;
     // repair bar label
 	std::vector<std::string> bar_label_;
+	std::vector<std::string> bar_label6_;
 	// mean setting
 	std::string mean_setting_;
 };
@@ -173,6 +174,18 @@ Classifier::Classifier(const string& model_file,
 	this->bar_label_.push_back(barlabel);
 	barlabel = "TR";
 	this->bar_label_.push_back(barlabel);
+	barlabel = "YBTL";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "YBGS";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "YBTR";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "FTTL";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "FTGS";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "FTTR";
+	this->bar_label6_.push_back(barlabel);
 
 	/* Set batchsize */
 	this->batch_size_ = 5;
@@ -689,18 +702,29 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
         for(int j = 0; j < this->output_number_; j++){
         	/* get bar left buttom and right top points */
             shift = this->get_predition_output_index(gd_class_array->gd_array[i].preds[j].type);
-			/* fix shift*/
-			shift = 2 - shift;
+			/* fix shift for TL GS TR*/
+			if(this->labels_.size() == 3){
+				shift = 2 - shift;
+			}else if(this->labels_.size() == 6){
+			    if(shift <= 2){
+				    shift = 2 - shift;
+				}else{
+				    shift = 8 - shift;
+				}
+			}
+			std::cout << "aa" << std::endl;
             bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
             bar_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound - int(gd_class_array->gd_array[i].preds[j].prob * 100));
             bar_bg_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound -100);
             /* draw probability bar */
+			std::cout << "bb" << std::endl;
+            bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
             cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
             cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
             /* write classes labels */
             //label = this->labels_[shift];
             //label.erase(label.length()-1);
-            label = this->bar_label_[shift];
+            label = this->bar_label6_[shift];
 			label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
             cv::putText(this->imgs_[i],label,label_point,0,0.5,cv::Scalar(255, 170, 0),2);
         }
