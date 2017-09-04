@@ -70,6 +70,7 @@ public:
 	void set_batch_size(int batch_size);
 	void set_output_number(int output_number);
 	void set_motion_visual(int moition_visual);
+	void set_mean_setting(std::string mean_setting);
 	void run();
 	void finish();
 
@@ -138,6 +139,8 @@ private:
 	bool motion_visual_;
     // repair bar label
 	std::vector<std::string> bar_label_;
+	// mean setting
+	std::string mean_setting_;
 };
 
 Classifier::Classifier(const string& model_file,
@@ -244,6 +247,9 @@ void Classifier::set_motion_visual(int motion_visual){
 	}else{
 		this->motion_visual_ = false;
 	}
+}
+void Classifier::set_mean_setting(std::string mean_setting){
+	this->mean_setting_ = mean_setting;
 }
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
@@ -385,40 +391,39 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
           cv::cvtColor(img, sample, CV_GRAY2BGR);
         else
           sample = img;
+        //std::cout << "original image mean: " << cv::mean(sample) << std::endl;
 
+        /* resize smaple image to fit input channel*/
         cv::Mat sample_resized;
         if (sample.size() != input_geometry_)
           cv::resize(sample, sample_resized, input_geometry_);
         else
           sample_resized = sample;
-      	//std::cout << sample_resized << std::endl;
         cv::Mat sample_float;
         if (num_channels_ == 3)
           sample_resized.convertTo(sample_float, CV_32FC3);
         else
           sample_resized.convertTo(sample_float, CV_32FC1);
 
-        std::cout << "size: " << input_geometry_ << std::endl;
+        //std::cout << "resized image mean: " << cv::mean(sample_float) << std::endl;
+
         /* mean substraction for guidedog */
-        if (num_channels_ == 3){
-          cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(128, 128, 128));
-          //cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
-          cv::subtract(sample_float, m, sample_float);
-          sample_float = sample_float * 0.0078125;
-		}
-        else{
-          cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC1, cv::Scalar(128));
-          cv::subtract(sample_float, m, sample_float);
-          sample_float = sample_float * 0.0078125;}
+        if(this->mean_setting_.compare("BVLC") == 0){
+        	std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+            cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
+            cv::subtract(sample_float, m, sample_float);
+        }else if(this->mean_setting_.compare("PDNN2_COLOR") == 0){
+        	std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+         	cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(128, 128, 128));
+         	cv::subtract(sample_float, m, sample_float);
+         	sample_float = sample_float * 0.0078125;
+		}else if(this->mean_setting_.compare("PDNN2") == 0){
+        	std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+         	cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC1, cv::Scalar(128));
+         	cv::subtract(sample_float, m, sample_float);
+         	sample_float = sample_float * 0.0078125;}
 
-        //cv::Mat sample_normalized;
-        //cv::subtract(sample_float, mean_, sample_normalized);
-
-        //cv::subtract(sample_float, mean_, sample_float);
-        //double min, max;
-        //cv::minMaxLoc(mean_, &min, &max);
-        //std::cout << min << "," << max << std::endl;
-        //std::cout << mean_ << std::endl;
+        //std::cout << "mean substraction mean: " << cv::mean(sample_float) << std::endl;
 
         /* old normalize */
         //cv::Mat sample_normalized;
@@ -796,6 +801,7 @@ int main(int argc, char** argv) {
  	string image_channel;
  	string image_folder;
  	string test_file;
+ 	string mean_setting;
 
  	double pred_threshold;
 	double diff_threshold;
@@ -845,6 +851,8 @@ int main(int argc, char** argv) {
 					image_folder  = x[1];
 				}else if(std::strcmp(x[0].c_str(), "test_file") == 0){
 					test_file  = x[1];
+				}else if(std::strcmp(x[0].c_str(), "mean_setting") == 0){
+					mean_setting  = x[1];
 				}
         		std::cout << x[0] << std::endl;
         		std::cout << x[1] << std::endl;
@@ -857,6 +865,7 @@ int main(int argc, char** argv) {
 	classifier.set_threshold(pred_threshold, diff_threshold);
 	classifier.set_batch_size(batch_size);
 	classifier.set_motion_visual(motion_visual);
+	classifier.set_mean_setting(mean_setting);
 	if(std::strcmp(gpu_cpu.c_str(), "CPU") == 0){
 		classifier.set_cpu(1);
 	}
