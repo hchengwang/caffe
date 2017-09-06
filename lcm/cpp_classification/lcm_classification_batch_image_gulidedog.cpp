@@ -422,16 +422,16 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
 
         /* mean substraction for guidedog */
         if(this->mean_setting_.compare("BVLC") == 0){
-        	std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+        	//std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
             cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
             cv::subtract(sample_float, m, sample_float);
         }else if(this->mean_setting_.compare("PDNN2_COLOR") == 0){
-        	std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+        	//std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
          	cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(128, 128, 128));
          	cv::subtract(sample_float, m, sample_float);
          	sample_float = sample_float * 0.0078125;
 		}else if(this->mean_setting_.compare("PDNN2") == 0){
-        	std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+        	//std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
          	cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC1, cv::Scalar(128));
          	cv::subtract(sample_float, m, sample_float);
          	sample_float = sample_float * 0.0078125;}
@@ -499,19 +499,19 @@ void Classifier::image_preprocess( ) {
     predictions = this->ClassifyBatch(this->imgs_, this->output_number_);
    
 	end_time = bot_timestamp_now();
-    std::cout << "process time: " << end_time - start_time << std::endl;
+    //std::cout << "process time: " << end_time - start_time << std::endl;
 
 	for (int j=0; j < this->batch_size_; j++)
 	{
 		for (int k = 0; k < this->output_number_; k++)
 		{
 			Prediction p = predictions[j][k];
-			std::cout << p.second << " - " << p.first << std::endl;
+			//std::cout << p.second << " - " << p.first << std::endl;
 
             types[j][k].type = (char*)p.first.c_str();
             types[j][k].prob = predictions[j][k].second;                 
 		}	
-		std::cout << "--------------------------" << std::endl;
+		//std::cout << "--------------------------" << std::endl;
 		gd_array[j].output_number = this->output_number_;
 		gd_array[j].preds = types[j];
 	}
@@ -540,7 +540,7 @@ void Classifier::carcmd_visualization(april_tags_gd_class_array_t* gd_class_arra
         if (this->imgs_[i].empty()) break;
         /* calculate v and omega from predictions*/
         twist = this->tf_probs2twist(gd_class_array->gd_array[i]); 
-        std:: cout << " v = " << twist.first << ", omega = " << twist.second << std::endl;
+        //std:: cout << " v = " << twist.first << ", omega = " << twist.second << std::endl;
         /* calculate velocity_left and velocity_right from predictions*/       
         //vel = this->tf_probs2vel(gd_class_array->gd_array[i]); 
         //std:: cout << " vel_left = " << vel.first << ", vel_right = " << vel.second << std::endl;
@@ -581,8 +581,8 @@ std::pair<float , float> Classifier::tf_probs2vel(april_tags_gd_class_t gd_class
         vel_left = l_prob * speed * (max_speed-min_speed) + min_speed;
         vel_right = r_prob * speed * (max_speed-min_speed) + min_speed;
     }
-     std::cout << "s_prob : " << s_prob << " r_prob : " << r_prob << " l_prob :" << l_prob << std::endl;
-    std::cout << "speed : " << speed << " vel_left : " << vel_left << " vel_right :" << vel_right << std::endl;
+     //std::cout << "s_prob : " << s_prob << " r_prob : " << r_prob << " l_prob :" << l_prob << std::endl;
+    //std::cout << "speed : " << speed << " vel_left : " << vel_left << " vel_right :" << vel_right << std::endl;
     return std::make_pair(vel_left, vel_right);
 	
 }
@@ -712,12 +712,10 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
 				    shift = 8 - shift;
 				}
 			}
-			std::cout << "aa" << std::endl;
             bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
             bar_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound - int(gd_class_array->gd_array[i].preds[j].prob * 100));
             bar_bg_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound -100);
             /* draw probability bar */
-			std::cout << "bb" << std::endl;
             bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
             cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
             cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
