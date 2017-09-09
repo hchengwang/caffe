@@ -722,7 +722,14 @@ void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
             /* write classes labels */
             //label = this->labels_[shift];
             //label.erase(label.length()-1);
-            label = this->bar_label6_[shift];
+			if(this->labels_.size() == 3){
+				label = this->bar_label_[shift];
+			}else if(this->labels_.size() == 6){
+				label = this->bar_label6_[shift];
+			}else{
+            	label = this->labels_[shift];
+            	label.erase(label.length()-1);	
+			}
 			label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
             cv::putText(this->imgs_[i],label,label_point,0,0.5,cv::Scalar(255, 170, 0),2);
         }
