@@ -20,6 +20,8 @@
 #include <string>
 
 #include <boost/filesystem.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/unordered_map.hpp>
 
 #include <lcm/lcm.h>
 #include <bot_core/bot_core.h>
@@ -27,12 +29,7 @@
 #include <lcmtypes/bot_core_image_t.h>
 #include <bot_lcmgl_client/lcmgl.h>
 #include <GL/gl.h>
-#include <lcmtypes/april_tags_tag_text_detection_t.h>
-#include <lcmtypes/april_tags_tag_text_detections_t.h>
-#include <lcmtypes/april_tags_quad_proposal_t.h>
-#include <lcmtypes/april_tags_quad_proposals_t.h>
-#include "lcmtypes/april_tags_caffe_class_t.h"
-#include "lcmtypes/april_tags_caffe_class_array_t.h"
+#include "lcmtypes/april_tags_class_t.h"
 #include "lcmtypes/april_tags_gd_class_t.h"
 #include "lcmtypes/april_tags_gd_class_array_t.h"
 #include <jpeg-utils/jpeg-utils.h>
@@ -66,30 +63,22 @@ public:
 			const string& label_file,
 			const string& gpu_cpu);
 
-	std::vector<Prediction> Classify(const cv::Mat& img, int N = 5);
     std::vector< vector<Prediction> > ClassifyBatch(const vector< cv::Mat > imgs, int N = 5);
 	void set_lcm(lcm_t* lcm, std::string image_channel);
 	void set_cpu(int is_cpu);
 	void set_threshold(double pred_threshold, double diff_threshold);
 	void set_batch_size(int batch_size);
 	void set_output_number(int output_number);
-	void draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,cv::Scalar color, int shift_x);
+	void set_motion_visual(int moition_visual);
+	void set_mean_setting(std::string mean_setting);
 	void run();
 	void finish();
 
 	// Message Handler
 	void on_libbot(const bot_core_image_t *msg);
-	void on_libbot_daniel(const bot_core_image_t *msg);
 	static void on_libbot_aux(const lcm_recv_buf_t* rbuf,
 			const char* channel,
 			const bot_core_image_t* msg,
-			void* user_data);
-
-	void on_tag_text_detections(const april_tags_tag_text_detections_t* msg);
-	void on_tag_text_detection(april_tags_tag_text_detection_t msg);
-	static void on_tag_text_detections_aux(const lcm_recv_buf_t* rbuf,
-			const char* channel,
-			const april_tags_tag_text_detections_t* msg,
 			void* user_data);
 
 	void image_preprocess();
@@ -97,18 +86,21 @@ public:
 			const char* channel,
 			const april_tags_quad_proposals_t* msg,
 			void* user_data);*/
+	void carcmd_visualization(april_tags_gd_class_array_t* gd_class_array);
+    std::pair<float , float> tf_probs2twist(april_tags_gd_class_t gd_array);
+    std::pair<float , float> tf_probs2vel(april_tags_gd_class_t gd_class);
+	float tf_probs2omega(float prob);
+	void draw_arrowimage(float tmp_v, float tmp_omega, int j, cv::Scalar color);
+	void draw_prob_bar(april_tags_gd_class_array_t* gd_class_array);
+	int get_predition_output_index(string output);
 
 private:
 	void SetMean(const string& mean_file);
 
-	std::vector<float> Predict(const cv::Mat& img);
 	std::vector<float> PredictBatch(const vector< cv::Mat > imgs);
 	
-	void WrapInputLayer(std::vector<cv::Mat>* input_channels);
 	void WrapBatchInputLayer(std::vector<std::vector<cv::Mat> > *input_batch);
 	
-	void Preprocess(const cv::Mat& img,
-			std::vector<cv::Mat>* input_channels);
 	void PreprocessBatch(const vector<cv::Mat> imgs,
             std::vector< std::vector<cv::Mat> >* input_batch);
 
@@ -125,8 +117,6 @@ private:
 	cvBridgeLCM * cv_bridge_lcm_;
 	// bot_lcmgl_t* lcmgl_;
 	bool finish_;
-	// caffe class;
-	april_tags_caffe_class_t caffe_class_;
 	// threshold 
 	double pred_threshold_;
 	double diff_threshold_;
@@ -138,12 +128,20 @@ private:
 	std::vector<cv::Mat> imgs_;
 	// get image;
 	int image_number_;
-	bool get_image_;
 	// output channel;
 	int output_number_;
 	// LCM Message Channels
 	std::string image_channel_;
-
+	int64_t start_time;
+	int64_t end_time;
+	bot_core_image_t_subscription_t* sub;
+	// motion visualization
+	bool motion_visual_;
+    // repair bar label
+	std::vector<std::string> bar_label_;
+	std::vector<std::string> bar_label6_;
+	// mean setting
+	std::string mean_setting_;
 };
 
 Classifier::Classifier(const string& model_file,
@@ -168,10 +166,31 @@ Classifier::Classifier(const string& model_file,
 	//this->pred_threshold_ = 0.9;
 	//this->diff_threshold_ = 3;
 
+    /* set bar label*/
+	std::string barlabel;
+	barlabel = "TL";
+	this->bar_label_.push_back(barlabel);
+	barlabel = "GS";
+	this->bar_label_.push_back(barlabel);
+	barlabel = "TR";
+	this->bar_label_.push_back(barlabel);
+	barlabel = "YBTL";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "YBGS";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "YBTR";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "FTTL";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "FTGS";
+	this->bar_label6_.push_back(barlabel);
+	barlabel = "FTTR";
+	this->bar_label6_.push_back(barlabel);
+
 	/* Set batchsize */
-	batch_size_ = 5;
+	this->batch_size_ = 5;
 	this->image_number_ = 0;
-	this->get_image_ = false;
+	this->motion_visual_ = 1;
 	/* Load the network. */
 	net_.reset(new Net<float>(model_file, TEST));
 	net_->CopyTrainedLayersFrom(trained_file);
@@ -187,9 +206,10 @@ Classifier::Classifier(const string& model_file,
 	
 	
 	/* Load the binaryproto mean file. */
-	//;if(boost::filesystem::exists(mean_file)){
-	//	SetMean(mean_file);
-	//}
+	if(boost::filesystem::exists(mean_file)){
+		//std::cout << " get mean file" << std::endl;
+		//SetMean(mean_file);
+	}
 
 	/* Load labels. */
 	std::ifstream labels(label_file.c_str());
@@ -212,16 +232,8 @@ void Classifier::set_lcm(lcm_t* lcm, std::string image_channel){
         //brian
         cv::Mat image;
         
-	bot_core_image_t_subscription_t* sub = bot_core_image_t_subscribe(
+	sub = bot_core_image_t_subscribe(
 			lcm, image_channel.c_str(), Classifier::on_libbot_aux, this);
-
-	const char* atags_channel = "TAG_TEXT_DETECTIONS";
-	april_tags_tag_text_detections_t_subscribe(
-			lcm, atags_channel, Classifier::on_tag_text_detections_aux, this);
-
-	const char* quads_channel = "QUAD_PROPOSALS";
-	/*april_tags_quad_proposals_t_subscribe(
-			lcm, quads_channel, Classifier::on_quad_proposals_aux, this);*/
 
 	cv_bridge_lcm_ = new cvBridgeLCM(lcm, lcm);
 	//caffe_class_ = new april_tags_caffe_class_t;
@@ -237,10 +249,20 @@ void Classifier::set_threshold(double pred_threshold, double diff_threshold){
 	this->diff_threshold_ = diff_threshold;
 }
 void Classifier::set_batch_size(int batch_size){
-	batch_size_ = batch_size;
+	this->batch_size_ = batch_size;
 }
 void Classifier::set_output_number(int output_number){
 	this->output_number_ = output_number;
+}
+void Classifier::set_motion_visual(int motion_visual){
+	if(motion_visual == 1){
+		this->motion_visual_ = true;
+	}else{
+		this->motion_visual_ = false;
+	}
+}
+void Classifier::set_mean_setting(std::string mean_setting){
+	this->mean_setting_ = mean_setting;
 }
 void Classifier::run() {
 	while(0 == lcm_handle(lcm_) && !finish_) ;
@@ -269,20 +291,6 @@ static std::vector<int> Argmax(const std::vector<float>& v, int N) {
 }
 
 /* Return the top N predictions. */
-std::vector<Prediction> Classifier::Classify(const cv::Mat& img, int N) {
-	std::vector<float> output = Predict(img);
-
-	N = std::min<int>(labels_.size(), N);
-	std::vector<int> maxN = Argmax(output, N);
-	std::vector<Prediction> predictions;
-	for (int i = 0; i < N; ++i) {
-		int idx = maxN[i];
-		predictions.push_back(std::make_pair(labels_[idx], output[idx]));
-	}
-
-	return predictions;
-}
-
 std::vector< vector<Prediction> > Classifier::ClassifyBatch(const vector< cv::Mat > imgs, int num_classes){
     std::vector<float> output_batch = PredictBatch(imgs);
     std::vector< std::vector<Prediction> > predictions;
@@ -327,35 +335,14 @@ void Classifier::SetMean(const string& mean_file) {
 	/* Compute the global mean pixel value and create a mean image
 	 * filled with this value. */
 	cv::Scalar channel_mean = cv::mean(mean);
+	//channel_mean = cv::Scalar(136, 145, 154); // added by brian
 	mean_ = cv::Mat(input_geometry_, mean.type(), channel_mean);
-}
-
-std::vector<float> Classifier::Predict(const cv::Mat& img) {
-	Blob<float>* input_layer = net_->input_blobs()[0];
-	input_layer->Reshape(1, num_channels_,
-			input_geometry_.height, input_geometry_.width);
-	/* Forward dimension change to all layers. */
-	net_->Reshape();
-
-	std::vector<cv::Mat> input_channels;
-
-	WrapInputLayer(&input_channels);
-
-	Preprocess(img, &input_channels);
-	std::cout << "input size : " << input_channels.size() << std::endl;
-	net_->Forward();
-
-	/* Copy the output layer to a std::vector */
-	Blob<float>* output_layer = net_->output_blobs()[0];
-	const float* begin = output_layer->cpu_data();
-	const float* end = begin + output_layer->channels();
-	return std::vector<float>(begin, end);
 }
 
 std::vector< float >  Classifier::PredictBatch(const vector< cv::Mat > imgs) {
   Blob<float>* input_layer = net_->input_blobs()[0];
 
-  input_layer->Reshape(batch_size_, num_channels_,
+  input_layer->Reshape(this->batch_size_, num_channels_,
                        input_geometry_.height,
                        input_geometry_.width);
 
@@ -379,18 +366,6 @@ std::vector< float >  Classifier::PredictBatch(const vector< cv::Mat > imgs) {
  * don't need to rely on cudaMemcpy2D. The last preprocessing
  * operation will write the separate channels directly to the input
  * layer. */
-void Classifier::WrapInputLayer(std::vector<cv::Mat>* input_channels) {
-	Blob<float>* input_layer = net_->input_blobs()[0];
-
-	int width = input_layer->width();
-	int height = input_layer->height();
-	float* input_data = input_layer->mutable_cpu_data();
-	for (int i = 0; i < input_layer->channels(); ++i) {
-		cv::Mat channel(height, width, CV_32FC1, input_data);
-		input_channels->push_back(channel);
-		input_data += width * height;
-	}
-}
 
 void Classifier::WrapBatchInputLayer(std::vector<std::vector<cv::Mat> > *input_batch){
     Blob<float>* input_layer = net_->input_blobs()[0];
@@ -412,48 +387,6 @@ void Classifier::WrapBatchInputLayer(std::vector<std::vector<cv::Mat> > *input_b
     cv::waitKey(1);
 }
 
-
-void Classifier::Preprocess(const cv::Mat& img,
-		std::vector<cv::Mat>* input_channels) {
-	/* Convert the input image to the input image format of the network. */
-	cv::Mat sample;
-	if (img.channels() == 3 && num_channels_ == 1)
-		cv::cvtColor(img, sample, cv::COLOR_BGR2GRAY);
-	else if (img.channels() == 4 && num_channels_ == 1)
-		cv::cvtColor(img, sample, cv::COLOR_BGRA2GRAY);
-	else if (img.channels() == 4 && num_channels_ == 3)
-		cv::cvtColor(img, sample, cv::COLOR_BGRA2BGR);
-	else if (img.channels() == 1 && num_channels_ == 3)
-		cv::cvtColor(img, sample, cv::COLOR_GRAY2BGR);
-	else
-		sample = img;
-
-	cv::Mat sample_resized;
-	if (sample.size() != input_geometry_)
-		cv::resize(sample, sample_resized, input_geometry_);
-	else
-		sample_resized = sample;
-
-	cv::Mat sample_float;
-	if (num_channels_ == 3)
-		sample_resized.convertTo(sample_float, CV_32FC3);
-	else
-		sample_resized.convertTo(sample_float, CV_32FC1);
-	//**important modified for no mean file(comment the below two lines)
-	//cv::Mat sample_normalized;
-	//cv::subtract(sample_float, mean_, sample_normalized);
-
-	/* This operation will write the separate BGR planes directly to the
-	 * input layer of the network because it is wrapped by the cv::Mat
-	 * objects in input_channels. */
-	//**important modified for no mean file(change sample_normalized to sample_float)	
-	cv::split(sample_float, *input_channels);
-
-	CHECK(reinterpret_cast<float*>(input_channels->at(0).data)
-			== net_->input_blobs()[0]->cpu_data())
-	<< "Input channels are not wrapping the input layer of the network.";
-}
-
 void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
                                       std::vector< std::vector<cv::Mat> >* input_batch){
     for (int i = 0 ; i < imgs.size(); i++){
@@ -471,23 +404,45 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
           cv::cvtColor(img, sample, CV_GRAY2BGR);
         else
           sample = img;
+        //std::cout << "original image mean: " << cv::mean(sample) << std::endl;
 
+        /* resize smaple image to fit input channel*/
         cv::Mat sample_resized;
         if (sample.size() != input_geometry_)
           cv::resize(sample, sample_resized, input_geometry_);
         else
           sample_resized = sample;
-      	//std::cout << sample_resized << std::endl;
         cv::Mat sample_float;
         if (num_channels_ == 3)
           sample_resized.convertTo(sample_float, CV_32FC3);
         else
           sample_resized.convertTo(sample_float, CV_32FC1);
+
+        //std::cout << "resized image mean: " << cv::mean(sample_float) << std::endl;
+
+        /* mean substraction for guidedog */
+        if(this->mean_setting_.compare("BVLC") == 0){
+        	//std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+            cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(136, 145, 154));
+            cv::subtract(sample_float, m, sample_float);
+        }else if(this->mean_setting_.compare("PDNN2_COLOR") == 0){
+        	//std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+         	cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC3, cv::Scalar(128, 128, 128));
+         	cv::subtract(sample_float, m, sample_float);
+         	sample_float = sample_float * 0.0078125;
+		}else if(this->mean_setting_.compare("PDNN2") == 0){
+        	//std::cout << "use mean setting: " << this->mean_setting_ << std::endl;
+         	cv::Mat m = cv::Mat(input_geometry_.height, input_geometry_.width, CV_32FC1, cv::Scalar(128));
+         	cv::subtract(sample_float, m, sample_float);
+         	sample_float = sample_float * 0.0078125;}
+
+        //std::cout << "mean substraction mean: " << cv::mean(sample_float) << std::endl;
+
+        /* old normalize */
         //cv::Mat sample_normalized;
         //cv::subtract(sample_float, mean_, sample_normalized);
+      	//cv::normalize(sample_float, sample_float, 0, 255, NORM_MINMAX, CV_32FC1);
 
-      	cv::normalize(sample_float, sample_float, 0, 255, NORM_MINMAX, CV_32FC1);
-      	//std::cout << sample_float << std::endl;
         /* This operation will write the separate BGR planes directly to the
          * input layer of the network because it is wrapped by the cv::Mat
          * objects in input_channels. */
@@ -497,126 +452,6 @@ void Classifier::PreprocessBatch(const vector<cv::Mat> imgs,
         //      == net_->input_blobs()[0]->cpu_data())
         //  << "Input channels are not wrapping the input layer of the network.";
     }
-}
-
-void Classifier::on_libbot_daniel(const bot_core_image_t* image_msg) {
-	std::cout << "callback" << std::endl;
-	start_time = bot_timestamp_now();
-//Modified for text detection by Daniel
-	
-	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
-	if(image_msg->pixelformat == BOT_CORE_IMAGE_T_PIXEL_FORMAT_MJPEG){
-	//jpegijg_decompress_8u_rgb (image_msg->data, image_msg->size,im_rgb.data, image_msg->width, image_msg->height, image_msg->width * 3);
-	}
-	cv::Mat im_rgb_flipx, im_rgb_flipy, im_thres;
-	//cv::flip(im_rgb, im_rgb_flipx, 0);
-	//cv::flip(im_rgb_flipx, im_rgb_flipy, 1);
-	cv::inRange(im_rgb, cv::Scalar(103, 142, 45), cv::Scalar(123, 179, 119), im_thres);
-	cv::resize(im_thres, im_thres, cv::Size(160,120));
-	Mat element = getStructuringElement(MORPH_RECT,Size(2,2));
-	cv::dilate(im_thres, im_thres, element);
-	//cv_bridge_lcm_->publish_gray(im_thres, (char*)"IMAGE_THRES");
-	vector<vector<Point> > contours;
-  	vector<Vec4i> hierarchy;
-	findContours( im_thres, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) ); 
-	vector<RotatedRect> minRect( contours.size() );
-	int rect_num=0;
-	//std::cout << "contour size" << contours.size() << std::endl;
-	for( int i = 0; i < contours.size(); i++ ){
-	//std::cout << contourArea(contours[i]) << std::endl;
-	if(contourArea(contours[i])>200){
-	drawContours( im_thres, contours, i, 100, 1, 8, vector<Vec4i>(), 0, Point() );	
-	minRect[rect_num] = minAreaRect( Mat(contours[i]) );
-	
-	rect_num++;
-	}
-	}
-	Point2f vertices[4];
-	
-	for (int index = 0; index < rect_num; index++){
-	minRect[index].points(vertices);
-	std::cout << "////////" << std::endl << vertices[0].x << " " << vertices[1].x << " " << vertices[2].x << " " << vertices[3].x << std::endl;
-	std::cout << vertices[0].y << " " << vertices[1].y << " " << vertices[2].y << " " << vertices[3].y  << std::endl;	
-	for (int i = 0; i < 4; i++)
-	line(im_thres, vertices[i], vertices[(i+1)%4], 100);
-	}
-	//cv_bridge_lcm_->publish_gray(im_thres, (char*)"IMAGE_BOX");
-
-	vector<Point2f> inputpts, outputpts;
-	float centerx=(vertices[0].x+vertices[1].x+vertices[2].x+vertices[3].x)/4, centery=(vertices[0].y+vertices[1].y+vertices[2].y+vertices[3].y)/4;
-	for(int i=0; i<4; i++){
-	if((vertices[i].x<=centerx)&&(vertices[i].y<=centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
-	}	
-	for(int i=0; i<4; i++){
-	if((vertices[i].x<=centerx)&&(vertices[i].y>centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
-	}
-for(int i=0; i<4; i++){
-	if((vertices[i].x>centerx)&&(vertices[i].y>centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
-	}
-for(int i=0; i<4; i++){
-	if((vertices[i].x>centerx)&&(vertices[i].y<=centery))inputpts.push_back(Point2f(vertices[i].x*4,vertices[i].y*4));
-	}
-
-	outputpts.push_back(Point2f(float(0), float(0)));
-    	outputpts.push_back(Point2f(float(0), float(31)));
-    	outputpts.push_back(Point2f(float(99), float(31)));
-    	outputpts.push_back(Point2f(float(99), float(0)));
-	Mat transMat = findHomography( inputpts, outputpts, 0 );
-   	Mat outputgray = Mat::zeros(32, 100, CV_8UC1);
-    	Mat output;
-	
-    	warpPerspective(im_rgb, output, transMat, Size(100, 32));
-	cvtColor(output, outputgray, CV_BGR2GRAY);
-	for(int i=0; i<4; i++)	
-	circle(im_rgb, Point2f(vertices[i].x*4,vertices[i].y*4), 2, Scalar(0, 0, 200), -1);
-	//cv_bridge_lcm_->publish_mjpg(im_rgb_flipy, (char*)"IMAGE_flip");	
-	//cv_bridge_lcm_->publish_mjpg(output, (char*)"IMAGE_cropped");	
-	std::cout<<"region_prop time"<<bot_timestamp_now()-start_time<<"us"<<std::endl;
-	
-	unsigned long t_init = GetTickCount();
-	std::vector<Prediction> predictions = this->Classify(output);
-	
-	for (size_t i = 0; i < predictions.size(); ++i) {
-			Prediction p = predictions[i];
-			std::cout << std::fixed << i << " " <<std::setprecision(4) << p.second << " - \""<< p.first << "\"" << std::endl;
-		}
-	unsigned long t_last = GetTickCount();
-	std::cout << "classifying time: " << t_last-t_init<< "ms" << std::endl;
-
-	
-	char temp0[50], temp1[50], temp2[50], temp3[50], temp4[50];
-	strcpy(temp0, predictions[0].first.c_str());
-	strcpy(temp1, predictions[1].first.c_str());
-	strcpy(temp2, predictions[2].first.c_str());
-	strcpy(temp3, predictions[3].first.c_str());
-	strcpy(temp4, predictions[4].first.c_str());
-	
-	
-	caffe_class_.class0=temp0;
-	caffe_class_.class1=temp1;
-	caffe_class_.class2=temp2;
-	caffe_class_.class3=temp3;
-	caffe_class_.class4=temp4;
-	
-
-
-	april_tags_caffe_class_t_publish(lcm_, "caffe_class", &caffe_class_);
-//	cv::Mat im_rgb = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
-//	cv::Mat im_vis = cv::Mat::zeros(image_msg->height, image_msg->width, CV_8UC3);
-//
-//	if(image_msg->pixelformat == BOT_CORE_IMAGE_T_PIXEL_FORMAT_MJPEG){
-//		// jpeg decompress
-//	    jpegijg_decompress_8u_rgb (image_msg->data, image_msg->size,
-//	    		im_rgb.data, image_msg->width, image_msg->height, image_msg->width * 3);
-//	}else {
-//		im_rgb.data = image_msg->data;
-//	}
-//        //brian
-//        this->image = im_rgb;
-//        //
-//	cv::Mat im_rect = cv::Mat::zeros(im_rgb.rows, im_rgb.cols, CV_8UC1);
-//	cv::cvtColor(im_rgb, im_rect, CV_RGB2GRAY);
-	// TODO: rectify image
 }
 
 void Classifier::on_libbot(const bot_core_image_t* image_msg) {
@@ -643,94 +478,264 @@ void Classifier::on_libbot(const bot_core_image_t* image_msg) {
 	CHECK(!img.empty()) << "Unable to decode image ";
 	this->img_rgb_ = im_rgb;
 	this->img_ = img;
-	this->get_image_ = true;
 	this->imgs_.push_back(im_rgb);
-	if(this->imgs_.size() == batch_size_){
+	if(this->imgs_.size() == this->batch_size_){
 		this->image_preprocess();
 		this->imgs_.clear();
 	}
 	
 }
 
-
-void Classifier::on_tag_text_detection (
-		const april_tags_tag_text_detection_t detection) {
-}
-
-void Classifier::on_tag_text_detections (
-		const april_tags_tag_text_detections_t* detections) {
-	std::cout << "bbox" << std::endl;
-}
-
 void Classifier::image_preprocess( ) {
 	 // measure process time
-	int64_t start_time;
 	start_time = bot_timestamp_now();
-    // return if image not received yet
-	if(!this->get_image_){
-		std::cout << "non get image" << std::endl;
-		return;
-	}
 	
     std::vector< std::vector<Prediction> > predictions;
 
-    int hit[batch_size_];
-    april_tags_caffe_class_t caffe_array[batch_size_];
-    april_tags_caffe_class_array_t caffe_class_array;
-    april_tags_gd_class_t gd_array[batch_size_];
+    april_tags_class_t types[this->batch_size_][this->output_number_];
+    april_tags_gd_class_t gd_array[this->batch_size_];
     april_tags_gd_class_array_t gd_class_array;
-
+    
     predictions = this->ClassifyBatch(this->imgs_, this->output_number_);
+   
+	end_time = bot_timestamp_now();
+    //std::cout << "process time: " << end_time - start_time << std::endl;
 
-	for (int j=0; j < batch_size_; j++)
+	for (int j=0; j < this->batch_size_; j++)
 	{
 		for (int k = 0; k < this->output_number_; k++)
 		{
 			Prediction p = predictions[j][k];
-			std::cout << p.first << " - " << p.second << std::endl;
+			//std::cout << p.second << " - " << p.first << std::endl;
 
-			gd_array[j].classes[k] = (char*)predictions[j][k].first.c_str();
-			gd_array[j].probs[k] = predictions[j][k].second;
-		}
-		std::cout << "--------------------------" << std::endl;
+            types[j][k].type = (char*)p.first.c_str();
+            types[j][k].prob = predictions[j][k].second;                 
+		}	
+		//std::cout << "--------------------------" << std::endl;
+		gd_array[j].output_number = this->output_number_;
+		gd_array[j].preds = types[j];
 	}
-
-	gd_class_array.n = batch_size_;
-	gd_class_array.gd_array = gd_array;
+    gd_class_array.gd_array = gd_array;
+	gd_class_array.batch_size = this->batch_size_;
 	april_tags_gd_class_array_t_publish(lcm_, "gd_class_array", &gd_class_array);
+	if(this->motion_visual_){
+		/* draw motion arrow */
+//    	this->carcmd_visualization(&gd_class_array);
+    	/* draw probability bar */
+        this->draw_prob_bar(&gd_class_array);
+    	std::stringstream drawn_image_topic;
+    	/* publish drawn iamges */
+    	drawn_image_topic << "image_with_motion_arrow_and_probability_bar";
+    	for (int i = 0; i < this->batch_size_; i++){
+     	    cv_bridge_lcm_->publish_mjpg(this->imgs_[i], (char*)drawn_image_topic.str().c_str());   		
+    	}
+	}
+}
+
+void Classifier::carcmd_visualization(april_tags_gd_class_array_t* gd_class_array){
+
+    std::pair<float, float> twist;
+    std::pair<float, float> vel;
+    for (int i = 0; i < this->batch_size_; i++){
+        if (this->imgs_[i].empty()) break;
+        /* calculate v and omega from predictions*/
+        twist = this->tf_probs2twist(gd_class_array->gd_array[i]); 
+        //std:: cout << " v = " << twist.first << ", omega = " << twist.second << std::endl;
+        /* calculate velocity_left and velocity_right from predictions*/       
+        //vel = this->tf_probs2vel(gd_class_array->gd_array[i]); 
+        //std:: cout << " vel_left = " << vel.first << ", vel_right = " << vel.second << std::endl;
+        /* draw motion arrow on sample images */
+        this->draw_arrowimage(twist.first, twist.second, i,cv::Scalar(0, 0, 255));
+    }
+}
+
+std::pair<float , float> Classifier::tf_probs2vel(april_tags_gd_class_t gd_class){
+
+    double vel_left = 0;
+    double vel_right = 0;
+    double speed = 0;
+    double l_prob = 0.001;
+    double s_prob = 0.001;
+    double r_prob = 0.001;
+    double max_speed = 1;
+    double min_speed = 0.1;
+
+	for (int i =  0; i < this->output_number_; i++){
+        if(gd_class.preds[i].type == labels_[1]){
+            s_prob = gd_class.preds[i].prob;
+        }
+        if(gd_class.preds[i].type == labels_[2]){
+            r_prob = gd_class.preds[i].prob;
+        }
+        if(gd_class.preds[i].type == labels_[0]){
+            l_prob = gd_class.preds[i].prob;
+        }
+	}
+    
+    if(gd_class.preds[0].type == labels_[1]){
+        speed = max_speed * (1 + s_prob) / 2;      
+        vel_left = (1-(r_prob*2)) * speed;
+        vel_right = (1-(l_prob*2)) * speed;
+    }else{
+        speed = (r_prob+l_prob) * 0.5 * max_speed;
+        vel_left = l_prob * speed * (max_speed-min_speed) + min_speed;
+        vel_right = r_prob * speed * (max_speed-min_speed) + min_speed;
+    }
+     //std::cout << "s_prob : " << s_prob << " r_prob : " << r_prob << " l_prob :" << l_prob << std::endl;
+    //std::cout << "speed : " << speed << " vel_left : " << vel_left << " vel_right :" << vel_right << std::endl;
+    return std::make_pair(vel_left, vel_right);
+	
+}
+
+std::pair<float , float> Classifier::tf_probs2twist(april_tags_gd_class_t gd_class){
+	float v, omega;
+	v = 0;
+	omega = 0;
+	std::vector<float> w_omega;
+	if(this->output_number_ == 3){
+		w_omega.push_back(-1);
+		w_omega.push_back(0);
+		w_omega.push_back(1);
+	}else if(this->output_number_ == 5){
+		w_omega.push_back(-1);
+		w_omega.push_back(0);
+		w_omega.push_back(0);
+		w_omega.push_back(0);
+		w_omega.push_back(1);
+	}
+	for (int i =  0; i < this->output_number_; i++){
+		for(int j = 0; j < labels_.size(); j++){
+			if(gd_class.preds[i].type == labels_[j]){
+				omega = omega + w_omega[j] * this->tf_probs2omega(gd_class.preds[i].prob);
+			}
+			v = 0.38;
+		}
+	}
+    return std::make_pair(v,omega);
+}
+
+float Classifier::tf_probs2omega(float prob){
+	float o, omega_scalar, sig_interval, alpha;
+	omega_scalar = 9;
+	sig_interval = 10;
+	alpha = 0.4;
+	/* sigmoid transfer function */
+	prob = -sig_interval + prob * 2 * sig_interval;
+	o = 1 / (1 + std::exp(-prob * alpha)); 
+    o = o * omega_scalar;
+	/*if(prob <= 0.2)
+        o  = prob /1.2;
+    else if (prob >= 0.8)
+        o = 1.8 + prob/(3-1.8);
+    else
+        o = 1.2 + prob/(1.8-1.2);*/
+    return o ;
+}
+
+void Classifier::draw_arrowimage(float tmp_v,float tmp_omega,int j,cv::Scalar color){
+	//std::stringstream drawn_image_topic;
+    //drawn_image_topic << "image_with_motion_arrow";
+ 
+	float angle,length;
+    int start_x,start_y,end_x,end_y;
+    float omega_max = 2.65;
+    //cv::cvtColor(img,img_arrow,CV_BGR2RGB);  
+    start_x = this->imgs_[j].size().width/2;
+    start_y = this->imgs_[j].size().height;
+
+    length = (tmp_v + 0.5) * 150;
+    angle = tmp_omega / omega_max * 90;
+    angle = angle / 180 * 3.1415;
+    if (angle > 0)
+        end_x = start_x - length * sin(abs(angle)) ;
+    else
+        end_x = start_x + length * sin(abs(angle)) ;
+    end_y = start_y - length * cos(abs(angle)) ;
+    end_x = int(end_x);
+    end_y = int(end_y);
+    int lineType = 8;
+    int thickness = 10;
+    cv::Point start(start_x,start_y);
+    cv::Point end(end_x,end_y);
+    cv::line(this->imgs_[j],start,end, color, thickness, lineType);
+    //cv::cvtColor(img_arrow,img_arrow,CV_RGB2BGR);
+
+    //std:: cout << " start = " << start_x << ", " << start_y << std::endl;
+	//std:: cout << " end = " << end_x << ", " << end_y << std::endl;
+    //cv_bridge_lcm_->publish_mjpg(this->imgs_[j], (char*)drawn_image_topic.str().c_str());
 
 }
 
-void Classifier::draw_annotation(cv::Mat &im, cv::Rect bbox, string anno,
-        cv::Scalar color, int shift_x){
+int Classifier::get_predition_output_index(std::string output){
+	int index = 0;
 
-    rectangle( im, bbox.tl(), bbox.br(), color, 2, 8, 0 );
-
-    // put text
-    string text = anno;
-    int fontFace = cv::FONT_HERSHEY_PLAIN;
-    double fontScale = 1;
-    int thickness = 1;
-
-    int baseline=0;
-    cv::Size textSize = cv::getTextSize(text, fontFace,
-            fontScale, thickness, &baseline);
-    baseline += thickness;
-
-    // center the text
-    cv::Point textOrg(bbox.x + shift_x, bbox.y - 8);
-
-    // draw the box
-    cv::rectangle(im, textOrg + cv::Point(0, baseline),
-            textOrg + cv::Point(textSize.width, -textSize.height),
-            color, CV_FILLED);
-
-    // then put the text itself
-    cv::putText(im, text, textOrg, fontFace, fontScale,
-            cv::Scalar::all(0), thickness, 8);
+    //output.erase(output.length()-1);
+	for(int i = 0; i <  this->output_number_; i++){
+		//std::cout << this->labels_[i] <<std::endl;
+		//std::cout << output <<std::endl;
+		
+		if(this -> labels_[i].compare(output) == 0){
+			//std::cout << this->labels_[i] <<std::endl;
+			index = i;
+		}
+	}
+	return index;
 }
 
+void Classifier::draw_prob_bar(april_tags_gd_class_array_t* gd_class_array){
 
+    std::pair<float, float> twist;
+    std::pair<float, float> vel;
+    std::string label;
+    cv::Point bar_start;  
+    cv::Point bar_end;
+    cv::Point bar_bg_end;
+    cv::Point label_point;
+    int shift;
+    int bar_width = 50;
+    int bar_left_bound = int ( (this->imgs_[0].size().width) / 2 - (bar_width * this->output_number_ / 2));
+    int bar_height_bound = int (this->imgs_[0].size().height);
+
+    for (int i = 0; i < this->batch_size_; i++){
+    	/* check images exit */
+        if (this->imgs_[i].empty()) break;  
+        for(int j = 0; j < this->output_number_; j++){
+        	/* get bar left buttom and right top points */
+            shift = this->get_predition_output_index(gd_class_array->gd_array[i].preds[j].type);
+			/* fix shift for TL GS TR*/
+			if(this->labels_.size() == 3){
+				shift = 2 - shift;
+			}else if(this->labels_.size() == 6){
+			    if(shift <= 2){
+				    shift = 2 - shift;
+				}else{
+				    shift = 8 - shift;
+				}
+			}
+            bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
+            bar_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound - int(gd_class_array->gd_array[i].preds[j].prob * 100));
+            bar_bg_end = cv::Point(bar_left_bound + (shift + 1) * bar_width, bar_height_bound -100);
+            /* draw probability bar */
+            bar_start = cv::Point(bar_left_bound + shift * bar_width, bar_height_bound);
+            cv::rectangle(this->imgs_[i], bar_start, bar_bg_end, cv::Scalar(255, 255, 255), -1, 8, 0);
+            cv::rectangle(this->imgs_[i], bar_start, bar_end, cv::Scalar(0, 0, 255), -1, 8, 0);
+            /* write classes labels */
+            //label = this->labels_[shift];
+            //label.erase(label.length()-1);
+			if(this->labels_.size() == 3){
+				label = this->bar_label_[shift];
+			}else if(this->labels_.size() == 6){
+				label = this->bar_label6_[shift];
+			}else{
+            	label = this->labels_[shift];
+            	label.erase(label.length()-1);	
+			}
+			label_point = cv::Point(bar_left_bound + shift * bar_width + 10, bar_height_bound - 10);
+            cv::putText(this->imgs_[i],label,label_point,0,0.5,cv::Scalar(255, 170, 0),2);
+        }
+    }
+    
+}
 
 
 void Classifier::on_libbot_aux(const lcm_recv_buf_t* rbuf,
@@ -739,20 +744,6 @@ void Classifier::on_libbot_aux(const lcm_recv_buf_t* rbuf,
 		void* user_data) {
 	(static_cast<Classifier *>(user_data))->on_libbot(msg);
 }
-
-void Classifier::on_tag_text_detections_aux( const lcm_recv_buf_t* rbuf,
-		const char* channel,
-		const april_tags_tag_text_detections_t* detections,
-		void* user_data) {
-	(static_cast<Classifier *>(user_data))->on_tag_text_detections(detections);
-}
-
-/*void Classifier::on_quad_proposals_aux( const lcm_recv_buf_t* rbuf,
-		const char* channel,
-		const april_tags_quad_proposals_t* proposals,
-		void* user_data) {
-	(static_cast<Classifier *>(user_data))->on_quad_proposals(proposals);
-}*/
 
 void read_frames(string image_folder,
 		vector<string> &frames_to_process, vector<string> &frames_names){
@@ -800,7 +791,7 @@ void setup_signal_handlers(void (*handler)(int))
 }
 
 int main(int argc, char** argv) {
-	if (argc < 6) {
+	/*if (argc < 6) {
 		std::cerr << "Usage: " << argv[0]
 		    << " deploy.prototxt network.caffemodel"
 		    << " mean.binaryproto labels.txt img.jpg"  << std::endl
@@ -817,94 +808,99 @@ int main(int argc, char** argv) {
 			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt lcm IMAGE_PICAMERA_wama"
 			<< std::endl;
 		return 1;
+	}*/
+
+	if (argc < 2) {
+		std::cerr << "Usage: " << argv[0]  << std::endl
+		    << "Example 1 (lcm): " << std::endl
+		    << " ./build/lcm/cpp_classification/lcm_classification_batch_image_gulidedog.bin configure /home/robotvision/icra2018-guidedog/config/VB/model_config_PDNN2_YB5_C_S_color.txt"
+		    << std::endl;
+		return 1;
 	}
 
 	::google::InitGoogleLogging(argv[0]);
 
-	string model_file   = argv[1];
-	string trained_file = argv[2];
-	string mean_file    = argv[3];
-	string label_file   = argv[4];
-	string gpu_cpu = argv[7];
-	Classifier classifier(model_file, trained_file, mean_file, label_file, gpu_cpu);
+	string model_file;
+	string trained_file;
+	string mean_file;
+	string label_file;
+	string gpu_cpu;
+ 	string config_file_path;
+ 	string mode;
+ 	string image_channel;
+ 	string image_folder;
+ 	string test_file;
+ 	string mean_setting;
 
-	double pred_threshold;
+ 	double pred_threshold;
 	double diff_threshold;
  	int batch_size;
  	int output_number;
+ 	int motion_visual;
 
-	/* set threshold */
+	if(std::strcmp(argv[1], "configure") == 0){
+		config_file_path = argv[2];
+        std::cout << config_file_path << std::endl;
+    	if (!boost::filesystem::exists(config_file_path)){
+       		std::cout << "Can't find " << config_file_path<< std::endl;
+    	}else{
+			std::cout << "read: " << config_file_path << std::endl;
 
-	if(std::strcmp(argv[13], "output_number") == 0){
-		output_number = atof(argv[14]);
-		classifier.set_output_number(output_number);
-	}
+        	std::ifstream inputFile(config_file_path.c_str());
 
-	if(std::strcmp(argv[8], "threshold") == 0){
-		pred_threshold = atof(argv[9]);
-		diff_threshold = atof(argv[10]);
-		classifier.set_threshold(pred_threshold, diff_threshold);
-	}
-	if(std::strcmp(argv[11], "batch") == 0){
-		batch_size = atoi(argv[12]);
-		classifier.set_batch_size(batch_size);
-	}
+        	string line;
+        	while (getline(inputFile, line)){
+        		std::vector<std::string> x ;
+        		boost::split(x, line, boost::is_any_of(":"));
+				if(std::strcmp(x[0].c_str(), "model") == 0){
+					model_file  = x[1];
+				}else if(std::strcmp(x[0].c_str(), "trained_file") == 0){
+					trained_file = x[1];
+				}else if(std::strcmp(x[0].c_str(), "mean_file") == 0){
+					mean_file = x[1];
+				}else if(std::strcmp(x[0].c_str(), "label_file") == 0){
+					label_file = x[1];
+				}else if(std::strcmp(x[0].c_str(), "gpu_cpu") == 0){
+					gpu_cpu = x[1];
+				}else if(std::strcmp(x[0].c_str(), "output_number") == 0){
+					output_number = atoi(x[1].c_str());
+				}else if(std::strcmp(x[0].c_str(), "pred_threshold") == 0){
+					pred_threshold = atof(x[1].c_str());
+				}else if(std::strcmp(x[0].c_str(), "diff_threshold") == 0){
+					diff_threshold = atof(x[1].c_str());
+				}else if(std::strcmp(x[0].c_str(), "batch_size") == 0){
+					batch_size  = atoi(x[1].c_str());
+				}else if(std::strcmp(x[0].c_str(), "mode") == 0){
+					mode  = x[1];
+				}else if(std::strcmp(x[0].c_str(), "image_channel") == 0){
+					image_channel  = x[1];	
+				}else if(std::strcmp(x[0].c_str(), "motion_visual") == 0){
+					motion_visual  = atoi(x[1].c_str());
+				}else if(std::strcmp(x[0].c_str(), "image_folder") == 0){
+					image_folder  = x[1];
+				}else if(std::strcmp(x[0].c_str(), "test_file") == 0){
+					test_file  = x[1];
+				}else if(std::strcmp(x[0].c_str(), "mean_setting") == 0){
+					mean_setting  = x[1];
+				}
+        		std::cout << x[0] << std::endl;
+        		std::cout << x[1] << std::endl;
+        	}
+        }
+    }
 
-	if(std::strcmp(argv[7], "CPU") == 0){
+	Classifier classifier(model_file, trained_file, mean_file, label_file, gpu_cpu);
+	classifier.set_output_number(output_number);
+	classifier.set_threshold(pred_threshold, diff_threshold);
+	classifier.set_batch_size(batch_size);
+	classifier.set_motion_visual(motion_visual);
+	classifier.set_mean_setting(mean_setting);
+	if(std::strcmp(gpu_cpu.c_str(), "CPU") == 0){
 		classifier.set_cpu(1);
 	}
+	/* set threshold */
 
-	if(std::strcmp(argv[5], "file") == 0){
-
-		string file = argv[6];
-		std::cout << "---------- Prediction for "
-				<< file << " ----------" << std::endl;
-
-		cv::Mat img = cv::imread(file, -1);
-		CHECK(!img.empty()) << "Unable to decode image " << file;
-		//cv::resize(img, img, cv::Size(32,100));
-		std::vector<Prediction> predictions = classifier.Classify(img);
-
-		/* Print the top N predictions. */
-		for (size_t i = 0; i < predictions.size(); ++i) {
-			Prediction p = predictions[i];
-			std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
-					<< p.first << "\"" << std::endl;
-		}
-
-	}else if(std::strcmp(argv[5], "folder") == 0){
-
-		string image_folder = argv[6];
-
-		vector<string> frames_to_process;
-		vector<string> frames_name;
-		read_frames(image_folder, frames_to_process, frames_name);
-
-		for(int f = 0; f < frames_to_process.size(); f++){
-
-			std::cout << "---------- Prediction for "
-					<< frames_to_process[f] << " ----------" << std::endl;
-			unsigned long t_init = GetTickCount();
-
-			cv::Mat img = cv::imread(frames_to_process[f], -1);
-
-			CHECK(!img.empty()) << "Unable to decode image " << frames_to_process[f];
-			std::vector<Prediction> predictions = classifier.Classify(img);
-
-			/* Print the top N predictions. */
-			for (size_t i = 0; i < predictions.size(); ++i) {
-				Prediction p = predictions[i];
-				std::cout << std::fixed << std::setprecision(4) << p.second << " - \""
-						<< p.first << "\"" << std::endl;
-			
-			}
-			unsigned long t_last = GetTickCount();
-	std::cout << "classifying time: " << t_last-t_init<< "ms" << std::endl;
-		}
-
-	}else if(std::strcmp(argv[5], "lcm") == 0){
-
-		string image_channel = argv[6];
+    if(std::strcmp(mode.c_str(), "lcm") == 0){
 
 		lcm_t* lcm = lcm_create(NULL);
 		classifier.set_lcm(lcm, image_channel);
@@ -914,6 +910,139 @@ int main(int argc, char** argv) {
 		
 		classifier.run();
 		
+	}
+
+
+    if(std::strcmp(mode.c_str(), "test_file") == 0){
+
+        /* set up parameter */
+		int image_folder_image_number = 0;
+		vector<string> image_path;
+		vector<int> gt;
+		std::vector<cv::Mat> image_folder_imgs;
+		std::vector< std::vector<Prediction> > predictions;
+	    int testing_data_number;
+        int hit[output_number];
+        int non_hit[output_number]; 
+        for (int i = 0; i < output_number; ++i){
+            hit[i] = 0;
+            non_hit[i] = 0;
+        }             
+
+        /* load images path and groundtruth */
+		if (!boost::filesystem::exists(test_file)){
+        	std::cout << "Can't find " << test_file << std::endl;
+    	}else{
+            std::cout << "read: " << test_file << std::endl;
+            std::ifstream inputFile(test_file.c_str());
+            string line;
+            while (getline(inputFile, line))
+            {
+                std::vector<std::string> strs;
+                boost::split(strs, line, boost::is_any_of(" "));
+                if(strs.size() < 1){
+                    break;
+                }
+                std::cout << strs[0] << strs[1] << std::endl;
+                image_path.push_back(strs[0]);
+                gt.push_back(atoi(strs[1].c_str()));;
+		    }
+		}
+		testing_data_number = gt.size();
+        /* load label list */
+        std::vector<string> label_list;
+	    std::ifstream labels_out(label_file.c_str());
+	    CHECK(labels_out) << "Unable to open labels file " << label_file;
+	    string line;
+	    while (std::getline(labels_out, line))
+		    label_list.push_back(string(line));
+		for (int i = 0; i < 5; i++){
+			std::cout << label_list[i] << std::endl;
+		}         
+		/* output result txt file */
+		std::ofstream testing_reuslt;
+		std::stringstream ss;
+		ss << "testing_reuslt.txt";
+		std::cout << ss.str().c_str() << " created"<< std::endl;
+        testing_reuslt.open(ss.str().c_str());
+
+        /* do prediction */
+		for(int f = 0; f < image_path.size(); f++){
+            image_folder_image_number ++;
+			std::cout << "---------- Prediction for "
+					<< image_path[f] << " ----------" << std::endl;
+            cv::Mat img = cv::imread(image_path[f], -1);
+            //cv::Mat img = cv::imread(image_path[f], 0);
+            image_folder_imgs.push_back(img);
+            if(image_folder_imgs.size() == batch_size || image_folder_image_number == testing_data_number){
+                if(image_folder_image_number == testing_data_number){
+                	int delta_image = batch_size - image_folder_imgs.size();
+                    for(int j = 0; j < delta_image; j++){
+                        image_folder_imgs.push_back(img);
+                    }
+                    f = f + delta_image;
+                }
+
+                unsigned long t_init = GetTickCount();
+                predictions = classifier.ClassifyBatch(image_folder_imgs, output_number);
+                unsigned long t_last = GetTickCount();
+	            std::cout << "classifying time: " << t_last-t_init<< "ms" << std::endl;
+	            for (int j=0; j < batch_size; j++){
+	            	int index = f - batch_size + 1 + j;
+	            	std::cout << "image number: " << index << std::endl;
+	            	if( index < testing_data_number){
+	            		string gt_label = label_list[gt[index]];
+	            		testing_reuslt << index << "," << image_path[index] << "," << gt_label.erase(gt_label.length() - 1) << ',';
+		            	for (int k = 0; k < output_number; k++){
+			            	Prediction p = predictions[j][k];
+			            	std::cout << p.second << " - " << p.first << std::endl; 
+			            	testing_reuslt << p.second << "," << p.first.erase(p.first.length() - 1) << ',';   
+		            	}	
+		            	if(label_list[gt[index]].compare(predictions[j][0].first) == 0){
+                        	hit[gt[index]] ++;
+                        	testing_reuslt << "hit" << std::endl;
+		            	}else{
+                        	non_hit[gt[index]] ++;
+                        	testing_reuslt << "non_hit" << std::endl;
+		            	}
+                    	for (int i = 0; i < output_number; ++i){
+                        	std::cout << label_list[i] << " hit: " << hit[i] << " non_hit: " << non_hit[i] << std::endl;
+                    	}  	 
+                    }           
+		        std::cout << "--------------------------" << std::endl;
+
+              	}
+              	image_folder_imgs.clear();
+            }
+		}
+		testing_reuslt << "hit_number";
+		for(int i = 0; i < output_number; i++){
+			testing_reuslt << "," << hit[i];
+		}
+		testing_reuslt << std::endl;
+		testing_reuslt << "non_hit_number";
+		for(int i = 0; i < output_number; i++){
+			testing_reuslt << "," << non_hit[i];
+		}
+		testing_reuslt << std::endl;
+		testing_reuslt << "accuracy";
+		for(int i = 0; i < output_number; i++){
+			testing_reuslt << "," << (double) hit[i] / (hit[i] + non_hit[i]);
+		}
+		testing_reuslt << std::endl;
+		testing_reuslt << "average accuracy";
+		int image_sum = 0;
+		int hit_sum = 0;
+		for(int i = 0; i < output_number; i++){
+			image_sum += hit[i];
+			image_sum += non_hit[i];
+			hit_sum += hit[i];
+		}
+		testing_reuslt << "," << (double) hit_sum  / image_sum;
+		testing_reuslt << std::endl;		
+		
+
+
 	}
 
 

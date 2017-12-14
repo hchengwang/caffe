@@ -1,5 +1,5 @@
 package april_tags;
 struct gd_class_t {
-  string classes[3];
-  float probs[3];
+  int32_t output_number;
+  class_t preds[output_number];
 }

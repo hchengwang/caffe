@@ -1,5 +1,5 @@
 package april_tags;
 struct gd_class_array_t {
-  int32_t n;
-  gd_class_t gd_array[n];
+  int32_t batch_size;
+  gd_class_t gd_array[batch_size];
 }

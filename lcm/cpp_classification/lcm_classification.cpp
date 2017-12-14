@@ -611,17 +611,17 @@ int main(int argc, char** argv) {
 		std::cerr << "Usage: " << argv[0]
 		    << " deploy.prototxt network.caffemodel"
 		    << " mean.binaryproto labels.txt img.jpg"  << std::endl
-		    << "Example 1 (file): " << std::endl
+		    << "Example 1 (file), GPU Mode; default threshold: " << std::endl
 		    << argv[0]
-		    << " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt examples/images/cat.jpg"
+		    << " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt file examples/images/cat.jpg 1 0"
 		    << std::endl
-			<< "Example 2 (folder): " << std::endl
+			<< "Example 2 (folder), GPU Mode; default threshold: " << std::endl
 			<< argv[0]
-			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt folder examples/images/"
+			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt folder examples/images/ 1 0"
 			<< std::endl
-			<< "Example 3 (lcm): " << std::endl
+			<< "Example 3 (lcm), GPU Mode; default threshold: " << std::endl
 			<< argv[0]
-			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt lcm IMAGE_PICAMERA_wama"
+			<< " models/bvlc_reference_caffenet/deploy.prototxt models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel data/ilsvrc12/imagenet_mean.binaryproto data/ilsvrc12/synset_words.txt lcm IMAGE_PICAMERA_wama 1 0"
 			<< std::endl;
 		return 1;
 	}
@@ -650,7 +650,7 @@ int main(int argc, char** argv) {
 	}
 
 	if(std::strcmp(argv[5], "file") == 0){
-
+		std::cout << "file mode" << std::endl;
 		string file = argv[6];
 		std::cout << "---------- Prediction for "
 				<< file << " ----------" << std::endl;
